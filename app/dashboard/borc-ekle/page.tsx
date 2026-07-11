@@ -9,8 +9,6 @@ const KATEGORILER = [
   { value: 'ihtiyac_kredisi', label: 'İhtiyaç Kredisi' },
   { value: 'konut_kredisi', label: 'Konut Kredisi' },
   { value: 'tasit_kredisi', label: 'Taşıt Kredisi' },
-  { value: 'fatura', label: 'Fatura' },
-  { value: 'kira', label: 'Kira' },
   { value: 'kisisel', label: 'Kişisel Borç' },
   { value: 'taksitli_alisveris', label: 'Taksitli Alışveriş' },
   { value: 'diger', label: 'Diğer' },
@@ -21,8 +19,6 @@ const KATEGORI_ALANLAR: Record<string, { taksit: boolean; faiz: boolean; tekTuta
   ihtiyac_kredisi: { taksit: true, faiz: true, tekTutar: false, kurumEtiket: 'Banka Adı' },
   konut_kredisi: { taksit: true, faiz: true, tekTutar: false, kurumEtiket: 'Banka Adı' },
   tasit_kredisi: { taksit: true, faiz: true, tekTutar: false, kurumEtiket: 'Banka Adı' },
-  fatura: { taksit: false, faiz: false, tekTutar: true, kurumEtiket: 'Fatura Türü (Elektrik, Su, İnternet vb.)' },
-  kira: { taksit: false, faiz: false, tekTutar: true, kurumEtiket: 'Ev Sahibi' },
   kisisel: { taksit: true, faiz: false, tekTutar: false, kurumEtiket: 'Kimden / Kime' },
   taksitli_alisveris: { taksit: true, faiz: false, tekTutar: false, kurumEtiket: 'Mağaza Adı' },
   diger: { taksit: true, faiz: true, tekTutar: false, kurumEtiket: 'Kurum / Kişi Adı' },
@@ -99,6 +95,10 @@ export default function BorcEklePage() {
               className="w-full px-3 py-2.5 border border-border rounded-lg text-sm bg-white">
               {KATEGORILER.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}
             </select>
+            <p className="text-[11px] text-muted mt-1">
+              Kira, elektrik/su/internet faturası gibi her ay tekrar eden ödemelerin mi var? Onları buraya değil,{' '}
+              <a href="/dashboard/gelir-gider/duzenli" className="underline text-navy">Gelir-Gider → Düzenli İşlemler</a>'den eklemen daha uygun olur — orada otomatik her ay görünür.
+            </p>
           </div>
 
           <div>

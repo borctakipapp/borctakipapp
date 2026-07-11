@@ -183,7 +183,10 @@ export default function BirikimDetayPage() {
 
         {(
           <div className="bg-sage-soft rounded-lg p-4 mb-6">
-            <h2 className="text-sm font-medium text-sage mb-3">Para Ekle / Çıkar</h2>
+            <h2 className="text-sm font-medium text-sage mb-1">Manuel Kayıt Ekle / Çıkar</h2>
+            <p className="text-[11px] text-muted mb-3">
+              Bu, Gelir-Gider'ini etkilemez — sadece bu hedefin toplam tutarını günceller. Elindeki parayı fiilen bir gider olarak kaydetmek istiyorsan, "Gelir / Gider Ekle" formundan "birikime aktarım" seçeneğini kullan.
+            </p>
             {tamamlandi && (
               <p className="text-xs text-sage mb-3">Hedefi tamamladın! İstersen fazladan eklemeye devam edebilirsin.</p>
             )}

@@ -674,7 +674,7 @@ function GelirGiderPageIc() {
             )}
           </div>
           <div className="bg-white rounded-lg p-4 border border-border">
-            <p className="text-xs text-muted mb-1">Bu Ay Manuel Gider</p>
+            <p className="text-xs text-muted mb-1">Bu Ay Diğer Gider</p>
             <p className="font-mono text-lg text-brick font-medium">{manuelGider.toLocaleString('tr-TR')} ₺</p>
             {planlananIslemler.some((p) => p.type === 'expense') && (
               <p className="text-[11px] text-amber mt-1">

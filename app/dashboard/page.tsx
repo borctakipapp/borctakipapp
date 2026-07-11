@@ -160,7 +160,7 @@ export default async function OzetPage() {
             <p className={`font-mono text-xl font-medium ${buAyNet >= 0 ? 'text-sage' : 'text-brick'}`}>{buAyNet.toLocaleString('tr-TR')} ₺</p>
           </Link>
           <div className={`rounded-lg p-4 border ${netDurumGenel >= 0 ? 'bg-sage-soft border-sage' : 'bg-brick-soft border-brick'}`}>
-            <p className="text-xs text-muted mb-1">Genel Net Durum</p>
+            <p className="text-xs text-muted mb-1">Net Varlık (Birikim − Borç)</p>
             <p className={`font-mono text-xl font-medium ${netDurumGenel >= 0 ? 'text-sage' : 'text-brick'}`}>{netDurumGenel.toLocaleString('tr-TR')} ₺</p>
           </div>
         </div>
