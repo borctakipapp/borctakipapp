@@ -15,24 +15,50 @@ export default function SifreGuncellePage() {
   const supabase = createClient()
 
   useEffect(() => {
+    let cozuldu = false
+
+    // Supabase bazen linke ?code=... (PKCE), bazen #access_token=... (hash) formatında bilgi koyuyor.
+    // Client kütüphanesi hash'i otomatik işliyor ama bu asenkron olabiliyor, o yüzden bir olay dinleyicisi + zaman aşımı kullanıyoruz.
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      if ((event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') && session) {
+        cozuldu = true
+        setGecersiz(false)
+        setHazir(true)
+      }
+    })
+
     async function hazirla() {
       const params = new URLSearchParams(window.location.search)
       const code = params.get('code')
+
       if (code) {
         const { error } = await supabase.auth.exchangeCodeForSession(code)
-        if (error) {
-          setGecersiz(true)
+        if (!error) {
+          cozuldu = true
+          setGecersiz(false)
           setHazir(true)
           return
         }
       }
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) {
-        setGecersiz(true)
-      }
-      setHazir(true)
+
+      // Hash tabanlı (#access_token=...) durumda client kütüphanesinin işlemesi için kısa bir süre bekle
+      setTimeout(async () => {
+        if (cozuldu) return
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session) {
+          setGecersiz(false)
+        } else {
+          setGecersiz(true)
+        }
+        setHazir(true)
+      }, 1000)
     }
+
     hazirla()
+
+    return () => {
+      authListener.subscription.unsubscribe()
+    }
   }, [])
 
   async function handleSubmit(e: React.FormEvent) {
