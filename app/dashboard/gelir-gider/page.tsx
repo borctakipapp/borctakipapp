@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, Suspense } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
@@ -64,7 +64,7 @@ type PlanlananIslem = {
   tarih: string
 }
 
-export default function GelirGiderPage() {
+function GelirGiderPageIc() {
   const router = useRouter()
   const supabase = createClient()
 
@@ -889,5 +889,13 @@ export default function GelirGiderPage() {
         onVazgec={() => setOnayAcik(false)}
       />
     </div>
+  )
+}
+
+export default function GelirGiderPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-paper flex items-center justify-center text-muted text-sm">Yükleniyor...</div>}>
+      <GelirGiderPageIc />
+    </Suspense>
   )
 }

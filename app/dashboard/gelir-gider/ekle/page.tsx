@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
@@ -19,7 +19,7 @@ function ikiBasamak(n: number) {
   return String(n).padStart(2, '0')
 }
 
-export default function GelirGiderEklePage() {
+function GelirGiderEklePageIc() {
   const router = useRouter()
   const supabase = createClient()
   const searchParams = useSearchParams()
@@ -267,5 +267,13 @@ export default function GelirGiderEklePage() {
         </form>
       </main>
     </div>
+  )
+}
+
+export default function GelirGiderEklePage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-paper flex items-center justify-center text-muted text-sm">Yükleniyor...</div>}>
+      <GelirGiderEklePageIc />
+    </Suspense>
   )
 }

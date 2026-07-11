@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import OnayModal from '@/components/OnayModal'
@@ -16,7 +16,7 @@ function bugun() {
   return `${n.getFullYear()}-${ay}-${gun}`
 }
 
-export default function GelirGiderDetayPage() {
+function GelirGiderDetayPageIc() {
   const router = useRouter()
   const params = useParams()
   const supabase = createClient()
@@ -214,5 +214,13 @@ export default function GelirGiderDetayPage() {
         onVazgec={() => setOnayAcik(false)}
       />
     </div>
+  )
+}
+
+export default function GelirGiderDetayPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-paper flex items-center justify-center text-muted text-sm">Yükleniyor...</div>}>
+      <GelirGiderDetayPageIc />
+    </Suspense>
   )
 }
