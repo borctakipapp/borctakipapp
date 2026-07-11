@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import AppHeader from '@/components/AppHeader'
 import AltNavigasyon from '@/components/AltNavigasyon'
 import OnayModal from '@/components/OnayModal'
+import Secim from '@/components/Secim'
 
 const AY_ISIMLERI = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık']
 
@@ -512,8 +513,11 @@ function GelirGiderPageIc() {
     fetchData()
   }
 
-  const toplamGelir = transactions.filter((t) => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0)
-  const manuelGider = transactions.filter((t) => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0)
+  // "Birikimden Çekim" gerçek bir gelir değil — kendi biriktirdiğin parayı geri almak.
+  // Bu yüzden Gelir'e saymıyoruz, bunun yerine aynı ayki "Birikim Aktarımı" giderinden düşüyoruz (net biriktirdiğini gösteriyor).
+  const birikimdenCekimToplami = transactions.filter((t) => t.type === 'income' && t.category === 'Birikimden Çekim').reduce((s, t) => s + Number(t.amount), 0)
+  const toplamGelir = transactions.filter((t) => t.type === 'income' && t.category !== 'Birikimden Çekim').reduce((s, t) => s + Number(t.amount), 0)
+  const manuelGider = transactions.filter((t) => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0) - birikimdenCekimToplami
   const netDurum = toplamGelir - manuelGider - borcOdemeleri
 
   const giderKategorileri: { label: string; tutar: number; renk: string }[] = []
@@ -521,7 +525,12 @@ function GelirGiderPageIc() {
   transactions.filter((t) => t.type === 'expense').forEach((t) => {
     giderMap[t.category] = (giderMap[t.category] || 0) + Number(t.amount)
   })
+  // "Birikimden Çekim" gelirini, aynı ayki "Birikim Aktarımı" giderinden düşerek net göster
+  if (birikimdenCekimToplami > 0 && giderMap['Birikim Aktarımı']) {
+    giderMap['Birikim Aktarımı'] = Math.max(0, giderMap['Birikim Aktarımı'] - birikimdenCekimToplami)
+  }
   Object.entries(giderMap).forEach(([kategori, tutar]) => {
+    if (tutar <= 0) return
     giderKategorileri.push({ label: kategori, tutar, renk: KATEGORI_RENK[kategori] || '#6b6f7a' })
   })
   if (borcOdemeleri > 0) {
@@ -601,7 +610,7 @@ function GelirGiderPageIc() {
               <button onClick={() => setOneriKapandi(true)} className="text-muted text-xs shrink-0 ml-2" aria-label="Kapat">✕</button>
             </div>
             <div className="flex flex-col gap-2">
-              <select
+              <Secim
                 value={oneriHedefId}
                 onChange={(e) => {
                   setOneriHedefId(e.target.value)
@@ -615,7 +624,7 @@ function GelirGiderPageIc() {
                     {h.goal_name} ({Number(h.current_amount).toLocaleString('tr-TR')} / {Number(h.target_amount).toLocaleString('tr-TR')} ₺){Number(h.current_amount) >= Number(h.target_amount) ? ' ✓' : ''}
                   </option>
                 ))}
-              </select>
+              </Secim>
               {oneriHedefId && (
                 <div className="flex gap-2">
                   <input

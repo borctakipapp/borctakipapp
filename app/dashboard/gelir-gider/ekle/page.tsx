@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import Secim from '@/components/Secim'
 
 const GELIR_KATEGORILERI = ['Maaş', 'Ek Gelir', 'Kira Geliri', 'Yatırım Geliri', 'Birikimden Çekim', 'Diğer Gelir']
 const GIDER_KATEGORILERI = ['Market/Gıda', 'Ulaşım', 'Eğlence', 'Sağlık', 'Giyim', 'Eğitim', 'Kişisel Bakım', 'Birikim Aktarımı', 'Diğer Gider']
@@ -198,10 +199,10 @@ function GelirGiderEklePageIc() {
 
           <div>
             <label className="text-xs text-muted mb-1 block">Kategori</label>
-            <select value={category} onChange={(e) => setCategory(e.target.value)}
+            <Secim value={category} onChange={(e) => setCategory(e.target.value)}
               className="w-full px-3 py-2.5 border border-border rounded-lg text-sm bg-white">
               {kategoriler.map((k) => <option key={k} value={k}>{k}</option>)}
-            </select>
+            </Secim>
           </div>
 
           <div>
@@ -239,11 +240,11 @@ function GelirGiderEklePageIc() {
           {type === 'expense' && hedefler.length > 0 && (
             <div>
               <label className="text-xs text-muted mb-1 block">Bir birikim hedefine aktarım mı? — opsiyonel</label>
-              <select value={selectedGoalId} onChange={(e) => setSelectedGoalId(e.target.value)}
+              <Secim value={selectedGoalId} onChange={(e) => setSelectedGoalId(e.target.value)}
                 className="w-full px-3 py-2.5 border border-border rounded-lg text-sm bg-white">
                 <option value="">Hayır, sadece normal gider</option>
                 {hedefler.map((h) => <option key={h.id} value={h.id}>{h.goal_name}</option>)}
-              </select>
+              </Secim>
               {selectedGoalId && (
                 <p className="text-[11px] text-sage mt-1">
                   Bu tutar kaydedilince, seçtiğin hedefe otomatik olarak eklenecek.

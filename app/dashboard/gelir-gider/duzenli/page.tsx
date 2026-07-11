@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import OnayModal from '@/components/OnayModal'
+import Secim from '@/components/Secim'
 
 const GELIR_KATEGORILERI = ['Maaş', 'Ek Gelir', 'Kira Geliri', 'Yatırım Geliri', 'Diğer Gelir']
 const GIDER_KATEGORILERI = ['Market/Gıda', 'Ulaşım', 'Eğlence', 'Sağlık', 'Giyim', 'Eğitim', 'Kişisel Bakım', 'Diğer Gider']
@@ -197,10 +198,10 @@ export default function DuzenliIslemlerPage() {
                 <div key={item.id} className="bg-white rounded-lg p-4 border border-navy flex flex-col gap-2.5">
                   <div>
                     <label className="text-xs text-muted mb-1 block">Kategori</label>
-                    <select value={editCategory} onChange={(e) => setEditCategory(e.target.value)}
+                    <Secim value={editCategory} onChange={(e) => setEditCategory(e.target.value)}
                       className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-white">
                       {kategoriler.map((k) => <option key={k} value={k}>{k}</option>)}
-                    </select>
+                    </Secim>
                   </div>
                   <div>
                     <label className="text-xs text-muted mb-1 block">Kaynak / Açıklama</label>

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import Secim from '@/components/Secim'
 
 const KATEGORILER = [
   { value: 'kredi_karti', label: 'Kredi Kartı' },
@@ -91,10 +92,10 @@ export default function BorcEklePage() {
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           <div>
             <label className="text-xs text-muted mb-1 block">Borç Türü</label>
-            <select value={category} onChange={(e) => setCategory(e.target.value)}
+            <Secim value={category} onChange={(e) => setCategory(e.target.value)}
               className="w-full px-3 py-2.5 border border-border rounded-lg text-sm bg-white">
               {KATEGORILER.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}
-            </select>
+            </Secim>
             <p className="text-[11px] text-muted mt-1">
               Kira, elektrik/su/internet faturası gibi her ay tekrar eden ödemelerin mi var? Onları buraya değil,{' '}
               <a href="/dashboard/gelir-gider/duzenli" className="underline text-navy">Gelir-Gider → Düzenli İşlemler</a>'den eklemen daha uygun olur — orada otomatik her ay görünür.

@@ -50,6 +50,7 @@ export default function BorcDetayPage() {
   const id = params.id as string
 
   const [loading, setLoading] = useState(true)
+  const [ekstraOdeme, setEkstraOdeme] = useState(0)
 
   const [category, setCategory] = useState('kredi_karti')
   const [institutionName, setInstitutionName] = useState('')
@@ -230,6 +231,13 @@ export default function BorcDetayPage() {
             const kalanTaksitlerToplami = orijinalTaksitTutari * kalanTaksitSayisi
             const kalanFaiz = Math.max(0, kalanTaksitlerToplami - kalanAnapara)
 
+            // Simülasyon: her ay ekstra X TL daha ödersen ne olur (düz faiz varsayımıyla basitleştirilmiş)
+            const anaparaPayi = P / nOrijinal // her taksitin sabit anapara payı
+            const etkinAylikOdeme = orijinalTaksitTutari + ekstraOdeme
+            const simYeniAySayisi = etkinAylikOdeme > 0 ? Math.ceil(kalanAnapara / (anaparaPayi + ekstraOdeme)) : kalanTaksitSayisi
+            const simKazanilanAy = Math.max(0, kalanTaksitSayisi - Math.min(simYeniAySayisi, kalanTaksitSayisi))
+            const simTasarrufFaiz = simKazanilanAy * (orijinalTaksitTutari - anaparaPayi)
+
             return (
               <details className="mb-6 bg-amber-soft rounded-lg p-4 border border-amber/30">
                 <summary className="text-sm font-medium text-navy cursor-pointer">Erken Kapama Analizi</summary>
@@ -249,6 +257,23 @@ export default function BorcDetayPage() {
                   <div className="flex justify-between"><span className="text-muted">— bunun faiz payı</span><span className="font-mono text-brick">{kalanFaiz.toLocaleString('tr-TR', { maximumFractionDigits: 0 })} ₺</span></div>
                   <div className="flex justify-between border-t border-amber/30 pt-2 mt-1"><span className="text-muted">Şimdi kapatırsan ödeyeceğin</span><span className="font-mono text-navy">{kalanAnapara.toLocaleString('tr-TR', { maximumFractionDigits: 0 })} ₺</span></div>
                   <div className="flex justify-between"><span className="font-medium text-sage">Erken kapatarak tasarrufun</span><span className="font-mono font-medium text-sage">{kalanFaiz.toLocaleString('tr-TR', { maximumFractionDigits: 0 })} ₺</span></div>
+                </div>
+
+                <div className="mt-4 pt-4 border-t border-amber/30">
+                  <p className="text-xs font-medium text-navy mb-2">Ya her ay biraz fazla ödersem?</p>
+                  <input
+                    type="range" min={0} max={Math.round(orijinalTaksitTutari)} step={50}
+                    value={ekstraOdeme}
+                    onChange={(e) => setEkstraOdeme(Number(e.target.value))}
+                    className="w-full accent-sage"
+                  />
+                  <p className="text-xs text-muted mb-3">
+                    Her ay <span className="font-mono text-navy">+{ekstraOdeme.toLocaleString('tr-TR')} ₺</span> fazladan ödersen:
+                  </p>
+                  <div className="bg-white rounded-lg p-3 flex flex-col gap-1.5 text-sm">
+                    <div className="flex justify-between"><span className="text-muted">Kaç ay erken biter</span><span className="font-mono text-sage font-medium">{simKazanilanAy} ay</span></div>
+                    <div className="flex justify-between"><span className="text-muted">Ek faiz tasarrufu</span><span className="font-mono text-sage font-medium">{simTasarrufFaiz.toLocaleString('tr-TR', { maximumFractionDigits: 0 })} ₺</span></div>
+                  </div>
                 </div>
               </details>
             )

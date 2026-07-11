@@ -6,6 +6,7 @@ export const SEKMELER = [
   { key: 'borclar', href: '/dashboard/borclar', etiket: 'Borçlar', ikon: '💳' },
   { key: 'gelir-gider', href: '/dashboard/gelir-gider', etiket: 'Gelir-Gider', ikon: '📊' },
   { key: 'birikim', href: '/dashboard/birikim', etiket: 'Birikim', ikon: '🎯' },
+  { key: 'gruplar', href: '/dashboard/gruplar', etiket: 'Ortak Hesap', ikon: '👥' },
 ] as const
 
 export type SekmeKey = typeof SEKMELER[number]['key']

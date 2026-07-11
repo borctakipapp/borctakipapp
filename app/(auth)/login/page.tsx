@@ -1,16 +1,17 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
-export default function LoginPage() {
+function LoginPageIc() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [mode, setMode] = useState<'signin' | 'signup'>('signin')
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
   const router = useRouter()
+  const searchParams = useSearchParams()
   const supabase = createClient()
 
   async function handleSubmit(e: React.FormEvent) {
@@ -24,8 +25,13 @@ export default function LoginPage() {
       else setMessage('Kayıt başarılı! E-postanı kontrol edip doğrulama linkine tıkla.')
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password })
-      if (error) setMessage('Hata: ' + error.message)
-      else { router.push('/dashboard'); router.refresh() }
+      if (error) {
+        setMessage('Hata: ' + error.message)
+      } else {
+        const sonra = searchParams.get('sonra')
+        router.push(sonra || '/dashboard')
+        router.refresh()
+      }
     }
     setLoading(false)
   }
@@ -77,5 +83,13 @@ export default function LoginPage() {
         </form>
       </div>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-navy" />}>
+      <LoginPageIc />
+    </Suspense>
   )
 }

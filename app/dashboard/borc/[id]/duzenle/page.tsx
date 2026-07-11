@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import OnayModal from '@/components/OnayModal'
+import Secim from '@/components/Secim'
 
 const KATEGORILER = [
   { value: 'kredi_karti', label: 'Kredi Kartı' }, { value: 'ihtiyac_kredisi', label: 'İhtiyaç Kredisi' },
@@ -114,9 +115,9 @@ export default function BorcDuzenlePage() {
         <form onSubmit={handleUpdate} className="flex flex-col gap-3">
           <div>
             <label className="text-xs text-muted mb-1 block">Borç Türü</label>
-            <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full px-3 py-2.5 border border-border rounded-lg text-sm bg-white">
+            <Secim value={category} onChange={(e) => setCategory(e.target.value)} className="w-full px-3 py-2.5 border border-border rounded-lg text-sm bg-white">
               {KATEGORILER.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}
-            </select>
+            </Secim>
           </div>
 
           <div>

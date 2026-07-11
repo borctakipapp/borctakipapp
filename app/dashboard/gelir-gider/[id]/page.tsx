@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import OnayModal from '@/components/OnayModal'
+import Secim from '@/components/Secim'
 
 const GELIR_KATEGORILERI = ['Maaş', 'Ek Gelir', 'Kira Geliri', 'Yatırım Geliri', 'Birikimden Çekim', 'Diğer Gelir']
 const GIDER_KATEGORILERI = ['Market/Gıda', 'Ulaşım', 'Eğlence', 'Sağlık', 'Giyim', 'Eğitim', 'Kişisel Bakım', 'Birikim Aktarımı', 'Diğer Gider']
@@ -153,10 +154,10 @@ function GelirGiderDetayPageIc() {
 
           <div>
             <label className="text-xs text-muted mb-1 block">Kategori</label>
-            <select value={category} onChange={(e) => setCategory(e.target.value)}
+            <Secim value={category} onChange={(e) => setCategory(e.target.value)}
               className="w-full px-3 py-2.5 border border-border rounded-lg text-sm bg-white">
               {kategoriler.map((k) => <option key={k} value={k}>{k}</option>)}
-            </select>
+            </Secim>
           </div>
 
           <div>

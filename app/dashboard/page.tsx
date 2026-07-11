@@ -86,6 +86,29 @@ export default async function OzetPage() {
     .slice(0, 4)
   const enYakinOdeme = yaklasanlar[0]
 
+  // Tüm borçlar için gecikme durumu (Finansal Sağlık Skoru için — sadece ilk 4'e değil, hepsine bakıyoruz)
+  const tumGunFarklari = (debts || [])
+    .filter((d) => d.due_date)
+    .map((d) => {
+      const [y, m, g] = d.due_date.split('-').map(Number)
+      const t = new Date(y, m - 1, g)
+      return Math.round((t.getTime() - bugunTarih.getTime()) / 86400000)
+    })
+  const gecikenSayisi = tumGunFarklari.filter((g) => g < 0).length
+
+  // Yapısal aylık borç yükü (taksitli borçların güncel taksit tutarları toplamı — o ay ödenmiş olsun olmasın)
+  const aylikBorcYuku = (debts || []).reduce((s, d) => {
+    if (d.installment_total && d.installment_remaining) {
+      return s + (Number(d.remaining_amount) / d.installment_remaining)
+    }
+    return s
+  }, 0)
+
+  // En yüksek faizli borç (önceliklendirme önerisi için)
+  const enYuksekFaizliBorc = (debts || [])
+    .filter((d) => d.interest_rate && Number(d.interest_rate) > 0)
+    .sort((a, b) => Number(b.interest_rate) - Number(a.interest_rate))[0]
+
   // Bu ayki gelir-gider
   const { data: buAyTx } = await supabase
     .from('transactions')
@@ -94,8 +117,10 @@ export default async function OzetPage() {
     .gte('transaction_date', baslangicStr)
     .lt('transaction_date', bitisStr)
 
-  const buAyGelir = (buAyTx || []).filter((t) => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0)
-  const buAyManuelGider = (buAyTx || []).filter((t) => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0)
+  // "Birikimden Çekim" gerçek bir gelir değil — Gelir-Gider sayfasındaki mantıkla tutarlı olsun diye burada da netliyoruz.
+  const birikimdenCekimToplamiOz = (buAyTx || []).filter((t) => t.type === 'income' && t.category === 'Birikimden Çekim').reduce((s, t) => s + Number(t.amount), 0)
+  const buAyGelir = (buAyTx || []).filter((t) => t.type === 'income' && t.category !== 'Birikimden Çekim').reduce((s, t) => s + Number(t.amount), 0)
+  const buAyManuelGider = (buAyTx || []).filter((t) => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0) - birikimdenCekimToplamiOz
 
   let buAyBorcOdemesi = 0
   if (debtIds.length > 0) {
@@ -110,12 +135,91 @@ export default async function OzetPage() {
 
   const buAyNet = buAyGelir - buAyManuelGider - buAyBorcOdemesi
 
+  // Geçen aya göre trend (basitleştirilmiş, birikim netlemesi olmadan — sadece yön göstergesi)
+  const oncekiAyTarih = new Date(yil, ay - 1, 1)
+  const oncekiYil = oncekiAyTarih.getFullYear()
+  const oncekiAy = oncekiAyTarih.getMonth()
+  const oncekiBaslangicStr = `${oncekiYil}-${ikiBasamakOz(oncekiAy + 1)}-01`
+
+  const { data: oncekiAyTx } = await supabase
+    .from('transactions')
+    .select('type, amount')
+    .eq('user_id', user.id)
+    .gte('transaction_date', oncekiBaslangicStr)
+    .lt('transaction_date', baslangicStr)
+
+  const oncekiGelir = (oncekiAyTx || []).filter((t) => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0)
+  const oncekiGider = (oncekiAyTx || []).filter((t) => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0)
+
+  let oncekiBorcOdemesi = 0
+  if (debtIds.length > 0) {
+    const { data: oncekiOdemeler } = await supabase
+      .from('payments')
+      .select('amount')
+      .in('debt_id', debtIds)
+      .gte('paid_at', `${oncekiBaslangicStr}T00:00:00`)
+      .lt('paid_at', `${baslangicStr}T00:00:00`)
+    oncekiBorcOdemesi = (oncekiOdemeler || []).reduce((s, p) => s + Number(p.amount), 0)
+  }
+
+  const oncekiAyNet = oncekiGelir - oncekiGider - oncekiBorcOdemesi
+  const oncekiVeriVar = (oncekiAyTx && oncekiAyTx.length > 0) || oncekiBorcOdemesi > 0
+
+  // Finansal Sağlık Skoru (0-100)
+  const borcGelirOrani = buAyGelir > 0 ? aylikBorcYuku / buAyGelir : null
+  const skorNedenleri: string[] = []
+  let skor = 0
+
+  if (borcGelirOrani === null) {
+    skor += 20
+  } else if (borcGelirOrani <= 0.20) {
+    skor += 40
+  } else if (borcGelirOrani <= 0.35) {
+    skor += 28
+    skorNedenleri.push('Borç/gelir oranın orta seviyede')
+  } else if (borcGelirOrani <= 0.50) {
+    skor += 12
+    skorNedenleri.push('Borç/gelir oranın yüksek')
+  } else {
+    skorNedenleri.push('Gelirinin yarısından fazlası borca gidiyor')
+  }
+
+  if (gecikenSayisi === 0) {
+    skor += 25
+  } else {
+    skorNedenleri.push(`${gecikenSayisi} borcun gecikmiş durumda`)
+  }
+
+  if (buAyNet >= 0) {
+    skor += 20
+  } else {
+    skorNedenleri.push('Bu ay giderin gelirini aştı')
+  }
+
+  if (toplamBirikim > 0) {
+    skor += 15
+  } else {
+    skorNedenleri.push('Henüz bir birikimin yok')
+  }
+
+  skor = Math.max(0, Math.min(100, skor))
+  // Tailwind class'ları TAM/sabit string olarak yazılmalı (dinamik `bg-${x}-soft` derleme zamanında tanınmaz)
+  const skorDurum = skor >= 70
+    ? { etiket: 'İyi', badge: 'bg-sage-soft text-sage', metin: 'text-sage', cubuk: 'bg-sage' }
+    : skor >= 40
+      ? { etiket: 'Orta', badge: 'bg-amber-soft text-amber', metin: 'text-amber', cubuk: 'bg-amber' }
+      : { etiket: 'Dikkat', badge: 'bg-brick-soft text-brick', metin: 'text-brick', cubuk: 'bg-brick' }
+
   // Gider dağılımı (mini)
   const giderMap: Record<string, number> = {}
   ;(buAyTx || []).filter((t) => t.type === 'expense').forEach((t) => {
     giderMap[t.category] = (giderMap[t.category] || 0) + Number(t.amount)
   })
+  if (birikimdenCekimToplamiOz > 0 && giderMap['Birikim Aktarımı']) {
+    giderMap['Birikim Aktarımı'] = Math.max(0, giderMap['Birikim Aktarımı'] - birikimdenCekimToplamiOz)
+  }
   const giderListesi = Object.entries(giderMap)
+    .filter(([, tutar]) => tutar > 0)
     .map(([kategori, tutar]) => ({ kategori, tutar, renk: KATEGORI_RENK[kategori] || '#6b6f7a' }))
     .sort((a, b) => b.tutar - a.tutar)
     .slice(0, 5)
@@ -135,13 +239,52 @@ export default async function OzetPage() {
           {toplamBorc.toLocaleString('tr-TR')} ₺
         </p>
         {tahminiAy !== null && (
-          <p className="text-sm text-sage font-medium mb-8">Borçsuz kalmana yaklaşık {tahminiAy} ay kaldı</p>
+          <p className="text-sm text-sage font-medium mb-8">
+            Borçsuz kalmana yaklaşık {tahminiAy} ay kaldı
+            <span className="text-muted font-normal"> (~{tahminiAy * 30} gün)</span>
+          </p>
         )}
         {tahminiAy === null && toplamBorc > 0 && (
           <p className="text-sm text-muted mb-8">Kapanma tahmini için henüz yeterli ödeme geçmişin yok</p>
         )}
         {toplamBorc === 0 && (
           <p className="text-sm text-sage font-medium mb-8">Hiç aktif borcun yok, harika durumdasın! 🎉</p>
+        )}
+
+        {/* Finansal Sağlık Skoru */}
+        <div className="bg-white rounded-lg border border-border p-5 mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-xs font-medium text-muted uppercase tracking-wide">Finansal Sağlığın</h2>
+            <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${skorDurum.badge}`}>
+              {skorDurum.etiket}
+            </span>
+          </div>
+          <div className="flex items-center gap-4">
+            <p className={`font-mono text-3xl font-medium ${skorDurum.metin}`}>{skor}<span className="text-base text-muted"> / 100</span></p>
+            <div className="flex-1 h-2 bg-paper rounded-full overflow-hidden">
+              <div style={{ width: `${skor}%` }} className={`h-full rounded-full ${skorDurum.cubuk}`} />
+            </div>
+          </div>
+          {skorNedenleri.length > 0 && (
+            <ul className="mt-3 flex flex-col gap-1">
+              {skorNedenleri.map((n) => (
+                <li key={n} className="text-xs text-muted">• {n}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {/* Borç Önceliklendirme */}
+        {enYuksekFaizliBorc && (
+          <Link
+            href={`/dashboard/borc/${enYuksekFaizliBorc.id}`}
+            className="block bg-white rounded-lg border border-border p-5 mb-8 hover:shadow-sm transition-shadow"
+          >
+            <h2 className="text-xs font-medium text-muted uppercase tracking-wide mb-2">Öncelik Önerisi</h2>
+            <p className="text-sm text-navy">
+              Önce <b>{enYuksekFaizliBorc.institution_name}</b> borcuna odaklan — faiz oranı (%{Number(enYuksekFaizliBorc.interest_rate).toLocaleString('tr-TR')}) diğerlerinden yüksek, erken kapatman en çok burada tasarruf sağlar.
+            </p>
+          </Link>
         )}
 
         {/* "Bugün" — bağlamsal, konuşma diliyle özet */}
@@ -165,6 +308,30 @@ export default async function OzetPage() {
               Bu ay elinde kalan: <b className="font-mono">{buAyNet.toLocaleString('tr-TR')} ₺</b>
             </p>
           </Link>
+
+          {borcGelirOrani !== null && borcGelirOrani > 0.5 && (
+            <div className="flex items-start gap-2.5">
+              <span className="text-lg leading-none">⚠️</span>
+              <p className="text-sm text-brick">
+                Gelirinin yaklaşık %{Math.round(borcGelirOrani * 100)}'i borca gidiyor — dikkatli ol.
+              </p>
+            </div>
+          )}
+
+          {oncekiVeriVar && (
+            <div className="flex items-start gap-2.5">
+              <span className="text-lg leading-none">📉</span>
+              {buAyNet >= oncekiAyNet ? (
+                <p className="text-sm text-navy">
+                  Bu ay geçen aya göre net durumun <b className="text-sage">iyileşti</b>
+                </p>
+              ) : (
+                <p className="text-sm text-navy">
+                  Bu ay geçen aya göre net durumun <b className="text-brick">zayıfladı</b>
+                </p>
+              )}
+            </div>
+          )}
 
           {aktifHedef && (
             <Link href={`/dashboard/birikim/${aktifHedef.id}`} className="flex items-start gap-2.5 hover:opacity-80 transition-opacity">

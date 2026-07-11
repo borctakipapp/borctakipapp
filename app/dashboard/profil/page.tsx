@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { TURKIYE_IL_ILCE, TURKIYE_ILLERI } from '@/lib/turkiye-il-ilce'
+import Secim from '@/components/Secim'
 
 const CINSIYET_SECENEKLERI = ['Kadın', 'Erkek', 'Belirtmek istemiyorum']
 const GELIR_ARALIKLARI = [
@@ -126,46 +127,46 @@ export default function ProfilPage() {
 
           <div>
             <label className="text-xs text-muted mb-1 block">İl</label>
-            <select
+            <Secim
               value={il}
               onChange={(e) => { setIl(e.target.value); setIlce('') }}
               className="w-full px-3 py-2.5 border border-border rounded-lg text-sm bg-white"
             >
               <option value="">Seçilmedi</option>
               {TURKIYE_ILLERI.map((i) => <option key={i} value={i}>{i}</option>)}
-            </select>
+            </Secim>
           </div>
 
           {il && (
             <div>
               <label className="text-xs text-muted mb-1 block">İlçe</label>
-              <select
+              <Secim
                 value={ilce}
                 onChange={(e) => setIlce(e.target.value)}
                 className="w-full px-3 py-2.5 border border-border rounded-lg text-sm bg-white"
               >
                 <option value="">Seçilmedi</option>
                 {(TURKIYE_IL_ILCE[il] || []).map((ic) => <option key={ic} value={ic}>{ic}</option>)}
-              </select>
+              </Secim>
             </div>
           )}
 
           <div>
             <label className="text-xs text-muted mb-1 block">Cinsiyet</label>
-            <select value={gender} onChange={(e) => setGender(e.target.value)}
+            <Secim value={gender} onChange={(e) => setGender(e.target.value)}
               className="w-full px-3 py-2.5 border border-border rounded-lg text-sm bg-white">
               <option value="">Seçilmedi</option>
               {CINSIYET_SECENEKLERI.map((g) => <option key={g} value={g}>{g}</option>)}
-            </select>
+            </Secim>
           </div>
 
           <div>
             <label className="text-xs text-muted mb-1 block">Aylık Gelir Aralığı</label>
-            <select value={incomeRange} onChange={(e) => setIncomeRange(e.target.value)}
+            <Secim value={incomeRange} onChange={(e) => setIncomeRange(e.target.value)}
               className="w-full px-3 py-2.5 border border-border rounded-lg text-sm bg-white">
               <option value="">Seçilmedi</option>
               {GELIR_ARALIKLARI.map((g) => <option key={g} value={g}>{g}</option>)}
-            </select>
+            </Secim>
           </div>
 
           <div>
