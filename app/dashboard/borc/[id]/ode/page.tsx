@@ -12,6 +12,8 @@ const KATEGORI_ALANLAR: Record<string, { taksit: boolean; faiz: boolean }> = {
   diger: { taksit: true, faiz: true },
 }
 
+type Payment = { id: string; amount: number; paid_at: string }
+
 function ikiBasamak(n: number) { return String(n).padStart(2, '0') }
 function tarihiAyKaydir(dateStr: string, ayFarki: number): string {
   const [y, m, d] = dateStr.split('-').map(Number)
@@ -48,6 +50,11 @@ export default function BorcOdemePage() {
   const [paymentAmount, setPaymentAmount] = useState('')
   const [onayAcik, setOnayAcik] = useState(false)
 
+  const [payments, setPayments] = useState<Payment[]>([])
+  const [selectedPayments, setSelectedPayments] = useState<Set<string>>(new Set())
+  const [deletingPayments, setDeletingPayments] = useState(false)
+  const [onaySilAcik, setOnaySilAcik] = useState(false)
+
   const fetchData = useCallback(async () => {
     const { data: debt } = await supabase.from('debts').select('*').eq('id', id).single()
     if (debt) {
@@ -60,6 +67,12 @@ export default function BorcOdemePage() {
       setDueDate(debt.due_date || '')
       setPrepaymentStrategy(debt.prepayment_strategy === 'taksit_dussun' ? 'taksit_dussun' : 'vade_kisalsin')
     }
+
+    const { data: paymentList } = await supabase
+      .from('payments').select('*').eq('debt_id', id).order('paid_at', { ascending: false })
+    setPayments(paymentList || [])
+    setSelectedPayments(new Set())
+
     setLoading(false)
   }, [id])
 
@@ -116,23 +129,24 @@ export default function BorcOdemePage() {
       }
     }
 
-    const { error: paymentError } = await supabase.from('payments').insert({ debt_id: id, amount: odenenTutar })
-    if (paymentError) { setMessage('Hata: ' + paymentError.message); setProcessing(false); return }
-
     let yeniDueDate = dueDate
     if (taksitVarMi && eskiKalanTaksit !== null && yeniTaksitKalan !== null) {
       const tamamlanan = eskiKalanTaksit - yeniTaksitKalan
       if (tamamlanan > 0 && dueDate) yeniDueDate = tarihiAyKaydir(dueDate, tamamlanan)
     }
 
-    const { error: updateError } = await supabase.from('debts').update({
-      remaining_amount: yeniKalan,
-      installment_remaining: yeniTaksitKalan,
-      due_date: yeniDueDate || null,
-      status: yeniKalan <= 0 ? 'paid' : 'active',
-    }).eq('id', id)
+    // Ödeme kaydı + borç güncellemesi artık TEK bir veritabanı fonksiyonunda (atomik) yapılıyor —
+    // arada bir hata olursa hiçbir şey kaydedilmez, veri yarım kalmaz.
+    const { error } = await supabase.rpc('odeme_kaydet', {
+      p_debt_id: id,
+      p_amount: odenenTutar,
+      p_yeni_kalan_tutar: yeniKalan,
+      p_yeni_taksit_kalan: yeniTaksitKalan,
+      p_yeni_due_date: yeniDueDate || null,
+      p_yeni_status: yeniKalan <= 0 ? 'paid' : 'active',
+    })
 
-    if (updateError) { setMessage('Hata: ' + updateError.message); setProcessing(false); return }
+    if (error) { setMessage('Hata: ' + error.message); setProcessing(false); return }
 
     setProcessing(false)
     if (yeniKalan <= 0) {
@@ -142,6 +156,62 @@ export default function BorcOdemePage() {
       router.push(`/dashboard/borc/${id}`)
       router.refresh()
     }
+  }
+
+  function toggleTogglePaymentSelection(paymentId: string) {
+    setSelectedPayments((prev) => {
+      const next = new Set(prev)
+      if (next.has(paymentId)) next.delete(paymentId); else next.add(paymentId)
+      return next
+    })
+  }
+
+  function handleDeleteSelectedPayments() {
+    if (selectedPayments.size === 0) return
+    setOnaySilAcik(true)
+  }
+
+  async function gercekOdemeleriSil() {
+    setOnaySilAcik(false)
+    setDeletingPayments(true)
+    setMessage('')
+
+    const silinecekler = payments.filter((p) => selectedPayments.has(p.id))
+    const toplamGeriEklenecekTutar = silinecekler.reduce((sum, p) => sum + Number(p.amount), 0)
+
+    const toplamTutar = parseFloat(totalAmount)
+    const yeniKalanTutar = Math.min(toplamTutar || Infinity, parseFloat(remainingAmount) + toplamGeriEklenecekTutar)
+
+    const eskiKalanTaksitSil = installmentRemaining ? parseInt(installmentRemaining) : null
+    let yeniKalanTaksit = eskiKalanTaksitSil
+    if (taksitVarMi && prepaymentStrategy === 'vade_kisalsin') {
+      yeniKalanTaksit = yeniKalanTutar <= 0 ? 0 : Math.min(parseInt(installmentTotal), Math.ceil(yeniKalanTutar / orijinalTaksitTutari))
+    }
+
+    let yeniDueDateSil = dueDate
+    if (taksitVarMi && prepaymentStrategy === 'vade_kisalsin' && eskiKalanTaksitSil !== null && yeniKalanTaksit !== null) {
+      const fark = yeniKalanTaksit - eskiKalanTaksitSil
+      if (fark > 0 && dueDate) yeniDueDateSil = tarihiAyKaydir(dueDate, -fark)
+    }
+
+    // Ödeme(leri) silme + borç güncellemesi de tek atomik RPC çağrısında.
+    const { error } = await supabase.rpc('odeme_sil_ve_geri_al', {
+      p_payment_ids: Array.from(selectedPayments),
+      p_debt_id: id,
+      p_yeni_kalan_tutar: yeniKalanTutar,
+      p_yeni_taksit_kalan: yeniKalanTaksit,
+      p_yeni_due_date: yeniDueDateSil || null,
+      p_yeni_status: yeniKalanTutar > 0 ? 'active' : 'paid',
+    })
+
+    if (error) {
+      setMessage('Hata: ' + error.message)
+      setDeletingPayments(false)
+      return
+    }
+
+    setDeletingPayments(false)
+    fetchData()
   }
 
   async function handleSelectedPay() {
@@ -235,6 +305,40 @@ export default function BorcOdemePage() {
           ✓ Tamamını Ödendi Olarak İşaretle
         </button>
 
+        {payments.length > 0 && (
+          <details className="mt-6">
+            <summary className="text-sm font-medium text-muted cursor-pointer flex items-center justify-between">
+              <span>Ödeme Geçmişi ({payments.length})</span>
+              {selectedPayments.size > 0 && (
+                <button
+                  onClick={(e) => { e.preventDefault(); handleDeleteSelectedPayments() }}
+                  disabled={deletingPayments}
+                  className="text-xs text-brick font-medium hover:underline disabled:opacity-60"
+                >
+                  {deletingPayments ? 'Siliniyor...' : `Seçilenleri Sil (${selectedPayments.size})`}
+                </button>
+              )}
+            </summary>
+            <p className="text-xs text-muted mt-2 mb-2">
+              Yanlışlıkla eklenen bir kaydı işaretleyip silebilirsin. Silme, borcu bu ödeme hiç yapılmamış gibi eski haline getirir.
+            </p>
+            <div className="flex flex-col gap-1.5">
+              {payments.map((p) => (
+                <label
+                  key={p.id}
+                  className={`bg-white rounded-lg px-3 py-2 flex items-center gap-3 text-sm border cursor-pointer transition-colors ${
+                    selectedPayments.has(p.id) ? 'border-brick bg-brick-soft/40' : 'border-border'
+                  }`}
+                >
+                  <input type="checkbox" checked={selectedPayments.has(p.id)} onChange={() => toggleTogglePaymentSelection(p.id)} />
+                  <span className="text-muted text-xs flex-1">{new Date(p.paid_at).toLocaleDateString('tr-TR')}</span>
+                  <span className="font-mono text-navy">{Number(p.amount).toLocaleString('tr-TR')} ₺</span>
+                </label>
+              ))}
+            </div>
+          </details>
+        )}
+
         {message && <p className="text-xs text-brick mt-3">{message}</p>}
         {infoMessage && <p className="text-xs text-sage mt-3 bg-white rounded-lg px-3 py-2 border border-sage/30">{infoMessage}</p>}
       </main>
@@ -247,6 +351,14 @@ export default function BorcOdemePage() {
         tehlikeli={false}
         onOnayla={gercekTamaminiOde}
         onVazgec={() => setOnayAcik(false)}
+      />
+
+      <OnayModal
+        acik={onaySilAcik}
+        baslik="Emin misin?"
+        mesaj={`${selectedPayments.size} ödeme kaydını silmek istediğine emin misin? Borç, bu ödemeler hiç yapılmamış gibi eski haline getirilecek.`}
+        onOnayla={gercekOdemeleriSil}
+        onVazgec={() => setOnaySilAcik(false)}
       />
     </div>
   )

@@ -134,29 +134,25 @@ function GelirGiderEklePageIc() {
       recurringId = recItem.id
     }
 
-    const { error } = await supabase.from('transactions').insert({
-      user_id: user.id,
-      type,
-      category,
-      amount: tutar,
-      transaction_date: date,
-      description: description || null,
-      is_recurring: isRecurring,
-      recurring_id: recurringId,
-      savings_goal_id: (type === 'expense' && selectedGoalId) ? selectedGoalId : null,
+    const buAktarimHedefi = (type === 'expense' && selectedGoalId) ? selectedGoalId : null
+
+    const { error } = await supabase.rpc('gelir_gider_ekle_ve_aktar', {
+      p_user_id: user.id,
+      p_type: type,
+      p_category: category,
+      p_amount: tutar,
+      p_transaction_date: date,
+      p_description: description || null,
+      p_is_recurring: isRecurring,
+      p_recurring_id: recurringId,
+      p_goal_id: buAktarimHedefi,
+      p_goal_direction: 'add',
     })
 
     if (error) {
       setMessage('Hata: ' + error.message)
       setLoading(false)
     } else {
-      if (type === 'expense' && selectedGoalId) {
-        const { data: hedef } = await supabase.from('savings_goals').select('current_amount').eq('id', selectedGoalId).single()
-        if (hedef) {
-          await supabase.from('savings_entries').insert({ goal_id: selectedGoalId, amount: tutar, type: 'add' })
-          await supabase.from('savings_goals').update({ current_amount: Number(hedef.current_amount) + tutar }).eq('id', selectedGoalId)
-        }
-      }
       const hedefUrl = hedefAy !== null && hedefYil !== null
         ? `/dashboard/gelir-gider?ay=${hedefAy}&yil=${hedefYil}`
         : '/dashboard/gelir-gider'

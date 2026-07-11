@@ -67,47 +67,35 @@ export default function BirikimDetayPage() {
     }
 
     setAddingEntry(true)
-    const { error: entryError } = await supabase.from('savings_entries').insert({
-      goal_id: id,
-      amount: tutar,
-      type: entryType,
-    })
-
-    if (entryError) {
-      setMessage('Hata: ' + entryError.message)
-      setAddingEntry(false)
-      return
-    }
-
-    const yeniTutar = entryType === 'add'
-      ? parseFloat(currentAmount) + tutar
-      : Math.max(0, parseFloat(currentAmount) - tutar)
-
-    const { error: updateError } = await supabase.from('savings_goals').update({
-      current_amount: yeniTutar,
-    }).eq('id', id)
-
-    if (updateError) {
-      setMessage('Hata: ' + updateError.message)
-      setAddingEntry(false)
-      return
-    }
 
     if (entryType === 'withdraw' && gelirOlarakEkle) {
+      // Para çekme + gelir kaydı birlikte: tek atomik RPC
       const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        await supabase.from('transactions').insert({
-          user_id: user.id,
-          type: 'income',
-          category: 'Birikimden Çekim',
-          amount: tutar,
-          transaction_date: bugunMetniBirikim(),
-          description: goalName,
-          is_recurring: false,
-          recurring_id: null,
-          savings_goal_id: id,
-        })
-      }
+      if (!user) { setMessage('Oturum bulunamadı.'); setAddingEntry(false); return }
+
+      const { error } = await supabase.rpc('gelir_gider_ekle_ve_aktar', {
+        p_user_id: user.id,
+        p_type: 'income',
+        p_category: 'Birikimden Çekim',
+        p_amount: tutar,
+        p_transaction_date: bugunMetniBirikim(),
+        p_description: goalName,
+        p_is_recurring: false,
+        p_recurring_id: null,
+        p_goal_id: id,
+        p_goal_direction: 'withdraw',
+      })
+
+      if (error) { setMessage('Hata: ' + error.message); setAddingEntry(false); return }
+    } else {
+      // Sadece hedefe para ekleme/çıkarma: tek atomik RPC
+      const { error } = await supabase.rpc('birikim_hareket_ekle', {
+        p_goal_id: id,
+        p_amount: tutar,
+        p_type: entryType,
+      })
+
+      if (error) { setMessage('Hata: ' + error.message); setAddingEntry(false); return }
     }
 
     setEntryAmount('')

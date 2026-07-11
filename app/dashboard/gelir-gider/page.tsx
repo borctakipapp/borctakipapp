@@ -460,22 +460,20 @@ function GelirGiderPageIc() {
     const hedef = hedefler.find((h) => h.id === oneriHedefId)
     if (!hedef) { setOneriYukleniyor(false); return }
 
-    const bugunTarihStr = bugunMetni()
-
-    await supabase.from('transactions').insert({
-      user_id: user.id,
-      type: 'expense',
-      category: 'Birikim Aktarımı',
-      amount: tutar,
-      transaction_date: bugunTarihStr,
-      description: hedef.goal_name,
-      is_recurring: false,
-      recurring_id: null,
-      savings_goal_id: oneriHedefId,
+    const { error } = await supabase.rpc('gelir_gider_ekle_ve_aktar', {
+      p_user_id: user.id,
+      p_type: 'expense',
+      p_category: 'Birikim Aktarımı',
+      p_amount: tutar,
+      p_transaction_date: bugunMetni(),
+      p_description: hedef.goal_name,
+      p_is_recurring: false,
+      p_recurring_id: null,
+      p_goal_id: oneriHedefId,
+      p_goal_direction: 'add',
     })
 
-    await supabase.from('savings_entries').insert({ goal_id: oneriHedefId, amount: tutar, type: 'add' })
-    await supabase.from('savings_goals').update({ current_amount: Number(hedef.current_amount) + tutar }).eq('id', oneriHedefId)
+    if (error) { setOneriYukleniyor(false); return }
 
     setOneriYukleniyor(false)
     setOneriHedefId('')
