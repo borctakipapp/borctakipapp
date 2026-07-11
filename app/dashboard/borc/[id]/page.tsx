@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import Monogram from '@/components/Monogram'
 
 const KATEGORI_ALANLAR: Record<string, { taksit: boolean; faiz: boolean; tekTutar: boolean }> = {
   kredi_karti: { taksit: false, faiz: true, tekTutar: false },
@@ -134,7 +135,10 @@ export default function BorcDetayPage() {
       </header>
 
       <main className="max-w-md mx-auto px-6 py-10">
-        <h1 className="text-xl font-medium text-navy mb-1">{institutionName}</h1>
+        <div className="flex items-center gap-3 mb-1">
+          <Monogram isim={institutionName} boyut={44} />
+          <h1 className="text-xl font-medium text-navy">{institutionName}</h1>
+        </div>
         <p className="text-xs text-muted mb-1">{KATEGORI_ETIKET[category] || category}{status === 'paid' && <span className="ml-1.5 text-sage">· Kapandı</span>}</p>
         <p className="text-sm text-muted mb-1">
           Kalan: <span className="font-mono text-navy">{parseFloat(remainingAmount).toLocaleString('tr-TR')} ₺</span>

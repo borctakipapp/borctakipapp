@@ -1,7 +1,9 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import BildirimZili from '@/components/BildirimZili'
+import AppHeader from '@/components/AppHeader'
+import AltNavigasyon from '@/components/AltNavigasyon'
+import Monogram from '@/components/Monogram'
 
 const KATEGORI_ETIKET: Record<string, string> = {
   kredi_karti: 'Kredi Kartı',
@@ -13,6 +15,18 @@ const KATEGORI_ETIKET: Record<string, string> = {
   kisisel: 'Kişisel Borç',
   taksitli_alisveris: 'Taksitli Alışveriş',
   diger: 'Diğer',
+}
+
+const KATEGORI_IKON: Record<string, string> = {
+  kredi_karti: '💳',
+  ihtiyac_kredisi: '💰',
+  konut_kredisi: '🏠',
+  tasit_kredisi: '🚗',
+  fatura: '⚡',
+  kira: '🏠',
+  kisisel: '👥',
+  taksitli_alisveris: '🛒',
+  diger: '📄',
 }
 
 function durumBilgisi(dueDate: string | null) {
@@ -38,40 +52,18 @@ export default async function BorclarPage() {
 
   return (
     <div className="min-h-screen bg-paper">
-      <header className="bg-navy px-6 py-4 flex items-center justify-between">
-        <span className="text-paper font-medium text-sm tracking-wide">borctakipapp</span>
-        <div className="flex items-center gap-3">
-          <Link href="/dashboard/profil" className="text-paper/80 hover:text-paper p-1.5" aria-label="Profilim">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="8" r="4" />
-              <path d="M4 20c0-4 3.5-7 8-7s8 3 8 7" />
-            </svg>
-          </Link>
-          <BildirimZili />
-          <form action="/auth/signout" method="post">
-            <button type="submit" className="text-paper/70 hover:text-paper text-xs border border-paper/30 rounded-md px-3 py-1.5 transition-colors">
-              Çıkış Yap
-            </button>
-          </form>
-        </div>
-      </header>
-
-      <nav className="bg-navy-light px-6 py-2 flex gap-4">
-        <Link href="/dashboard" className="text-paper/60 hover:text-paper text-sm pb-1">Özet</Link>
-        <span className="text-paper text-sm font-medium border-b-2 border-paper pb-1">Borçlar</span>
-        <Link href="/dashboard/gelir-gider" className="text-paper/60 hover:text-paper text-sm pb-1">Gelir-Gider</Link>
-        <Link href="/dashboard/birikim" className="text-paper/60 hover:text-paper text-sm pb-1">Birikim</Link>
-      </nav>
-
-      <main className="max-w-2xl mx-auto px-6 py-10">
-        <p className="text-sm text-muted mb-1">{user.email}</p>
-        <p className="text-sm text-muted mb-1">Toplam borcunuz</p>
-        <p className="font-mono text-4xl font-medium text-navy tracking-tight mb-6">
+      <AppHeader aktif="borclar" />
+<main className="max-w-2xl mx-auto px-6 py-10 pb-24 md:pb-10">
+        <p className="text-sm text-muted mb-1">Toplam Borcun</p>
+        <p className="font-mono text-5xl font-medium text-navy tracking-tight mb-2">
           {toplamBorc.toLocaleString('tr-TR')} ₺
+        </p>
+        <p className="text-sm text-muted mb-6">
+          {debts && debts.length > 0 ? `Toplam ${debts.length} aktif borcun var.` : 'Henüz aktif borcun yok.'}
         </p>
 
         <Link
-          href="/dashboard/borc-ekle"
+          href="/dashboard/borc/ekle"
           className="inline-block mb-8 bg-navy text-paper text-sm font-medium rounded-lg px-4 py-2.5 hover:bg-navy-light transition-colors"
         >
           + Yeni Borç Ekle
@@ -92,10 +84,14 @@ export default async function BorclarPage() {
               <Link
                 key={debt.id}
                 href={`/dashboard/borc/${debt.id}`}
-                className={`bg-white rounded-lg pl-4 pr-4 py-3 flex items-center justify-between border-l-4 ${durum.renk} hover:shadow-sm transition-shadow`}
+                className={`bg-white rounded-lg pl-4 pr-4 py-3 flex items-center gap-3 border-l-4 ${durum.renk} hover:shadow-sm transition-shadow`}
               >
-                <div>
-                  <p className="font-medium text-navy text-sm">{debt.institution_name}</p>
+                <Monogram isim={debt.institution_name} boyut={38} />
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-navy text-sm truncate">
+                    <span className="mr-1">{KATEGORI_IKON[debt.category] || '📄'}</span>
+                    {debt.institution_name}
+                  </p>
                   <p className="text-xs text-muted mt-0.5">
                     {KATEGORI_ETIKET[debt.category] || debt.category}
                     {durum.etiket && (
@@ -103,7 +99,7 @@ export default async function BorclarPage() {
                     )}
                   </p>
                 </div>
-                <span className="font-mono text-navy text-sm">
+                <span className="font-mono text-navy text-sm shrink-0">
                   {Number(debt.remaining_amount).toLocaleString('tr-TR')} ₺
                 </span>
               </Link>
@@ -111,6 +107,8 @@ export default async function BorclarPage() {
           })}
         </div>
       </main>
+
+      <AltNavigasyon aktif="borclar" />
     </div>
   )
 }

@@ -1,7 +1,8 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import BildirimZili from '@/components/BildirimZili'
+import AppHeader from '@/components/AppHeader'
+import AltNavigasyon from '@/components/AltNavigasyon'
 import MaasOnboardingBanner from '@/components/MaasOnboardingBanner'
 
 const KATEGORI_RENK: Record<string, string> = {
@@ -25,7 +26,9 @@ export default async function OzetPage() {
   const bitisYil = ay === 11 ? yil + 1 : yil
   const bitisAy = ay === 11 ? 0 : ay + 1
   const bitisStr = `${bitisYil}-${ikiBasamakOz(bitisAy + 1)}-01`
-  const bugunStr = `${yil}-${ikiBasamakOz(ay + 1)}-${ikiBasamakOz(simdi.getDate())}`
+
+  const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single()
+  const ilkIsim = profile?.full_name ? profile.full_name.split(' ')[0] : null
 
   // Borçlar
   const { data: debts } = await supabase
@@ -38,15 +41,21 @@ export default async function OzetPage() {
   const toplamBorc = (debts || []).reduce((sum, d) => sum + Number(d.remaining_amount), 0)
   const debtIds = (debts || []).map((d) => d.id)
 
-  const { data: hedefler } = await supabase.from('savings_goals').select('current_amount').eq('user_id', user.id)
+  const { data: hedefler } = await supabase
+    .from('savings_goals')
+    .select('id, goal_name, current_amount, target_amount')
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: true })
+
   const toplamBirikim = (hedefler || []).reduce((s, h) => s + Number(h.current_amount), 0)
   const netDurumGenel = toplamBirikim - toplamBorc
+  const aktifHedef = (hedefler || []).find((h) => Number(h.current_amount) < Number(h.target_amount))
+  const aktifHedefOrani = aktifHedef ? Math.min(100, (Number(aktifHedef.current_amount) / Number(aktifHedef.target_amount)) * 100) : 0
 
   // Borç kapanma tahmini (son 6 ay)
   const altiAyOnce = new Date()
   altiAyOnce.setMonth(altiAyOnce.getMonth() - 6)
   let tahminiAy: number | null = null
-  let ortalamaAylikOdeme = 0
 
   if (debtIds.length > 0 && toplamBorc > 0) {
     const { data: sonAltiAyOdemeler } = await supabase
@@ -58,7 +67,7 @@ export default async function OzetPage() {
     if (sonAltiAyOdemeler && sonAltiAyOdemeler.length > 0) {
       const toplamOdeme = sonAltiAyOdemeler.reduce((s, p) => s + Number(p.amount), 0)
       const aylarSet = new Set(sonAltiAyOdemeler.map((p) => p.paid_at.slice(0, 7)))
-      ortalamaAylikOdeme = toplamOdeme / aylarSet.size
+      const ortalamaAylikOdeme = toplamOdeme / aylarSet.size
       if (ortalamaAylikOdeme > 0) tahminiAy = Math.ceil(toplamBorc / ortalamaAylikOdeme)
     }
   }
@@ -75,8 +84,9 @@ export default async function OzetPage() {
     })
     .sort((a, b) => a.gunKaldi - b.gunKaldi)
     .slice(0, 4)
+  const enYakinOdeme = yaklasanlar[0]
 
-  // Bu ayki gelir-gider (basit özet — devreden bakiye dahil değil, tam detay Gelir-Gider sayfasında)
+  // Bu ayki gelir-gider
   const { data: buAyTx } = await supabase
     .from('transactions')
     .select('type, category, amount')
@@ -113,71 +123,78 @@ export default async function OzetPage() {
 
   return (
     <div className="min-h-screen bg-paper">
-      <header className="bg-navy px-6 py-4 flex items-center justify-between">
-        <span className="text-paper font-medium text-sm tracking-wide">borctakipapp</span>
-        <div className="flex items-center gap-3">
-          <Link href="/dashboard/profil" className="text-paper/80 hover:text-paper p-1.5" aria-label="Profilim">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="8" r="4" />
-              <path d="M4 20c0-4 3.5-7 8-7s8 3 8 7" />
-            </svg>
-          </Link>
-          <BildirimZili />
-          <form action="/auth/signout" method="post">
-            <button type="submit" className="text-paper/70 hover:text-paper text-xs border border-paper/30 rounded-md px-3 py-1.5 transition-colors">
-              Çıkış Yap
-            </button>
-          </form>
-        </div>
-      </header>
-
-      <nav className="bg-navy-light px-6 py-2 flex gap-4">
-        <span className="text-paper text-sm font-medium border-b-2 border-paper pb-1">Özet</span>
-        <Link href="/dashboard/borclar" className="text-paper/60 hover:text-paper text-sm pb-1">Borçlar</Link>
-        <Link href="/dashboard/gelir-gider" className="text-paper/60 hover:text-paper text-sm pb-1">Gelir-Gider</Link>
-        <Link href="/dashboard/birikim" className="text-paper/60 hover:text-paper text-sm pb-1">Birikim</Link>
-      </nav>
-
-      <main className="max-w-2xl mx-auto px-6 py-10">
-        <p className="text-sm text-muted mb-6">{user.email}</p>
+      <AppHeader aktif="ozet" />
+<main className="max-w-2xl mx-auto px-6 py-10 pb-24 md:pb-10">
+        <p className="text-lg text-navy mb-6">Merhaba{ilkIsim ? `, ${ilkIsim}` : ''} 👋</p>
 
         <MaasOnboardingBanner />
 
-        <div className="grid grid-cols-2 gap-3 mb-3">
-          <Link href="/dashboard/borclar" className="bg-white rounded-lg p-4 border border-border hover:shadow-sm transition-shadow">
-            <p className="text-xs text-muted mb-1">Toplam Borç</p>
-            <p className="font-mono text-xl text-navy font-medium">{toplamBorc.toLocaleString('tr-TR')} ₺</p>
+        {/* Hero: toplam borç, büyük ve net */}
+        <p className="text-sm text-muted mb-1">Toplam Borcun</p>
+        <p className="font-mono text-5xl font-medium text-navy tracking-tight mb-2">
+          {toplamBorc.toLocaleString('tr-TR')} ₺
+        </p>
+        {tahminiAy !== null && (
+          <p className="text-sm text-sage font-medium mb-8">Borçsuz kalmana yaklaşık {tahminiAy} ay kaldı</p>
+        )}
+        {tahminiAy === null && toplamBorc > 0 && (
+          <p className="text-sm text-muted mb-8">Kapanma tahmini için henüz yeterli ödeme geçmişin yok</p>
+        )}
+        {toplamBorc === 0 && (
+          <p className="text-sm text-sage font-medium mb-8">Hiç aktif borcun yok, harika durumdasın! 🎉</p>
+        )}
+
+        {/* "Bugün" — bağlamsal, konuşma diliyle özet */}
+        <div className="bg-white rounded-lg border border-border p-5 mb-8 flex flex-col gap-3">
+          <h2 className="text-xs font-medium text-muted uppercase tracking-wide">Bugün</h2>
+
+          {enYakinOdeme && (
+            <Link href={`/dashboard/borc/${enYakinOdeme.id}`} className="flex items-start gap-2.5 hover:opacity-80 transition-opacity">
+              <span className="text-lg leading-none">💳</span>
+              <p className="text-sm text-navy">
+                {enYakinOdeme.gunKaldi < 0 && <><b>{enYakinOdeme.institution_name}</b> ödemesi {Math.abs(enYakinOdeme.gunKaldi)} gün gecikti.</>}
+                {enYakinOdeme.gunKaldi === 0 && <><b>{enYakinOdeme.institution_name}</b> için bugün son gün.</>}
+                {enYakinOdeme.gunKaldi > 0 && <>{enYakinOdeme.gunKaldi} gün sonra <b>{enYakinOdeme.institution_name}</b> ödemen var — {Number(enYakinOdeme.remaining_amount).toLocaleString('tr-TR')} ₺</>}
+              </p>
+            </Link>
+          )}
+
+          <Link href="/dashboard/gelir-gider" className="flex items-start gap-2.5 hover:opacity-80 transition-opacity">
+            <span className="text-lg leading-none">💰</span>
+            <p className="text-sm text-navy">
+              Bu ay elinde kalan: <b className="font-mono">{buAyNet.toLocaleString('tr-TR')} ₺</b>
+            </p>
           </Link>
-          <Link href="/dashboard/birikim" className="bg-white rounded-lg p-4 border border-border hover:shadow-sm transition-shadow">
-            <p className="text-xs text-muted mb-1">Toplam Birikim</p>
-            <p className="font-mono text-xl text-sage font-medium">{toplamBirikim.toLocaleString('tr-TR')} ₺</p>
-          </Link>
+
+          {aktifHedef && (
+            <Link href={`/dashboard/birikim/${aktifHedef.id}`} className="flex items-start gap-2.5 hover:opacity-80 transition-opacity">
+              <span className="text-lg leading-none">🎯</span>
+              <p className="text-sm text-navy">
+                <b>{aktifHedef.goal_name}</b> hedefinde %{aktifHedefOrani.toFixed(0)} yoldasın
+              </p>
+            </Link>
+          )}
+
+          {!enYakinOdeme && !aktifHedef && (
+            <p className="text-sm text-muted">Şu an takip edilecek yaklaşan bir şey yok — güzel bir gün!</p>
+          )}
         </div>
 
-        <div className="grid grid-cols-2 gap-3 mb-3">
-          <Link href="/dashboard/gelir-gider" className={`rounded-lg p-4 border hover:shadow-sm transition-shadow ${buAyNet >= 0 ? 'bg-sage-soft border-sage' : 'bg-brick-soft border-brick'}`}>
-            <p className="text-xs text-muted mb-1">Bu Ay Net</p>
-            <p className={`font-mono text-xl font-medium ${buAyNet >= 0 ? 'text-sage' : 'text-brick'}`}>{buAyNet.toLocaleString('tr-TR')} ₺</p>
+        {/* İkincil rakamlar — sade, beyaz kartlar */}
+        <div className="grid grid-cols-2 gap-3 mb-8">
+          <Link href="/dashboard/birikim" className="bg-white rounded-lg p-4 border border-border hover:shadow-sm transition-shadow">
+            <p className="text-xs text-muted mb-1">Toplam Birikim</p>
+            <p className="font-mono text-lg text-navy font-medium">{toplamBirikim.toLocaleString('tr-TR')} ₺</p>
           </Link>
-          <div className={`rounded-lg p-4 border ${netDurumGenel >= 0 ? 'bg-sage-soft border-sage' : 'bg-brick-soft border-brick'}`}>
-            <p className="text-xs text-muted mb-1">Net Varlık (Birikim − Borç)</p>
-            <p className={`font-mono text-xl font-medium ${netDurumGenel >= 0 ? 'text-sage' : 'text-brick'}`}>{netDurumGenel.toLocaleString('tr-TR')} ₺</p>
+          <div className="bg-white rounded-lg p-4 border border-border">
+            <p className="text-xs text-muted mb-1">Net Varlık</p>
+            <p className={`font-mono text-lg font-medium ${netDurumGenel >= 0 ? 'text-navy' : 'text-brick'}`}>{netDurumGenel.toLocaleString('tr-TR')} ₺</p>
           </div>
         </div>
 
-        {tahminiAy !== null && (
-          <p className="text-xs text-muted mb-6">
-            Son 6 aydaki temponla, <span className="text-sage font-medium">yaklaşık {tahminiAy} ay sonra</span> borçsuz olursun.
-          </p>
-        )}
-        {tahminiAy === null && toplamBorc > 0 && (
-          <p className="text-xs text-muted mb-6">Kapanma tahmini için henüz yeterli ödeme geçmişin yok.</p>
-        )}
-        {toplamBorc === 0 && (
-          <p className="text-xs text-sage mb-6">Hiç aktif borcun yok, harika durumdasın! 🎉</p>
-        )}
-
-        <h2 className="text-sm font-medium text-muted mb-3">Yaklaşan Ödemeler</h2>
+        <h2 className="text-sm font-medium text-muted mb-3">
+          Yaklaşan Ödemeler {yaklasanlar.length > 0 && <span className="text-muted/60">({yaklasanlar.length})</span>}
+        </h2>
         {yaklasanlar.length === 0 ? (
           <p className="text-muted text-sm bg-white rounded-lg p-4 border border-border mb-8">Yaklaşan bir ödemen yok.</p>
         ) : (
@@ -199,9 +216,9 @@ export default async function OzetPage() {
         )}
 
         {giderListesi.length > 0 && (
-          <>
-            <h2 className="text-sm font-medium text-muted mb-3">Bu Ayki Gider Dağılımı</h2>
-            <div className="bg-white rounded-lg p-4 border border-border flex flex-col gap-2.5">
+          <details>
+            <summary className="text-sm font-medium text-muted cursor-pointer mb-3">Bu Ayki Gider Dağılımı</summary>
+            <div className="bg-white rounded-lg p-4 border border-border flex flex-col gap-2.5 mt-2">
               {giderListesi.map((g) => (
                 <div key={g.kategori} className="flex items-center gap-3">
                   <span className="text-xs text-navy w-28 shrink-0 truncate">{g.kategori}</span>
@@ -212,9 +229,11 @@ export default async function OzetPage() {
                 </div>
               ))}
             </div>
-          </>
+          </details>
         )}
       </main>
+
+      <AltNavigasyon aktif="ozet" />
     </div>
   )
 }

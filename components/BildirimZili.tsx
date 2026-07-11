@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import Monogram from '@/components/Monogram'
 
 type YaklasanBorc = {
   id: string
@@ -101,13 +102,14 @@ export default function BildirimZili() {
                     key={y.id}
                     href={`/dashboard/borc/${y.id}`}
                     onClick={() => setAcik(false)}
-                    className="flex items-center justify-between px-4 py-2.5 hover:bg-paper transition-colors border-b border-border last:border-0"
+                    className="flex items-center gap-2.5 px-4 py-2.5 hover:bg-paper transition-colors border-b border-border last:border-0"
                   >
-                    <div>
-                      <p className="text-sm text-navy font-medium">{y.institution_name}</p>
+                    <Monogram isim={y.institution_name} boyut={28} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-navy font-medium truncate">{y.institution_name}</p>
                       <p className={`text-[11px] ${etiket.renk}`}>{etiket.metin}</p>
                     </div>
-                    <span className="font-mono text-xs text-navy">
+                    <span className="font-mono text-xs text-navy shrink-0">
                       {Number(y.remaining_amount).toLocaleString('tr-TR')} ₺
                     </span>
                   </Link>

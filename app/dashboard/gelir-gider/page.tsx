@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback, Suspense } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import BildirimZili from '@/components/BildirimZili'
+import AppHeader from '@/components/AppHeader'
+import AltNavigasyon from '@/components/AltNavigasyon'
 import OnayModal from '@/components/OnayModal'
 
 const AY_ISIMLERI = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık']
@@ -536,32 +537,8 @@ function GelirGiderPageIc() {
 
   return (
     <div className="min-h-screen bg-paper">
-      <header className="bg-navy px-6 py-4 flex items-center justify-between">
-        <span className="text-paper font-medium text-sm tracking-wide">borctakipapp</span>
-        <div className="flex items-center gap-3">
-          <Link href="/dashboard/profil" className="text-paper/80 hover:text-paper p-1.5" aria-label="Profilim">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="8" r="4" />
-              <path d="M4 20c0-4 3.5-7 8-7s8 3 8 7" />
-            </svg>
-          </Link>
-          <BildirimZili />
-          <form action="/auth/signout" method="post">
-            <button type="submit" className="text-paper/70 hover:text-paper text-xs border border-paper/30 rounded-md px-3 py-1.5 transition-colors">
-              Çıkış Yap
-            </button>
-          </form>
-        </div>
-      </header>
-
-      <nav className="bg-navy-light px-6 py-2 flex gap-4">
-        <Link href="/dashboard" className="text-paper/60 hover:text-paper text-sm pb-1">Özet</Link>
-        <Link href="/dashboard/borclar" className="text-paper/60 hover:text-paper text-sm pb-1">Borçlar</Link>
-        <span className="text-paper text-sm font-medium border-b-2 border-paper pb-1">Gelir-Gider</span>
-        <Link href="/dashboard/birikim" className="text-paper/60 hover:text-paper text-sm pb-1">Birikim</Link>
-      </nav>
-
-      <main className="max-w-2xl mx-auto px-6 py-10">
+      <AppHeader aktif="gelir-gider" />
+<main className="max-w-2xl mx-auto px-6 py-10 pb-24 md:pb-10">
 
         <div className="flex items-center justify-between mb-3">
           <button onClick={() => setYil(yil - 1)} className="text-navy text-sm px-3 py-1.5 rounded-md hover:bg-white transition-colors">← {yil - 1}</button>
@@ -587,14 +564,12 @@ function GelirGiderPageIc() {
           })}
         </div>
 
-        <div className={`rounded-lg p-4 border mb-2 ${ devredenBakiye + netDurum >= 0 ? 'bg-navy border-navy' : 'bg-brick-soft border-brick'}`}>
-          <p className={`text-xs mb-1 ${ devredenBakiye + netDurum >= 0 ? 'text-paper/70' : 'text-brick'}`}>
-            Toplam Bakiye {devredenBakiye !== 0 && `(devreden: ${devredenBakiye.toLocaleString('tr-TR')} ₺)`}
-          </p>
-          <p className={`font-mono text-2xl font-medium ${ devredenBakiye + netDurum >= 0 ? 'text-paper' : 'text-brick'}`}>
-            {( devredenBakiye + netDurum ).toLocaleString('tr-TR')} ₺
-          </p>
-        </div>
+        <p className="text-sm text-muted mb-1">
+          Toplam Bakiyen {devredenBakiye !== 0 && `(devreden: ${devredenBakiye.toLocaleString('tr-TR')} ₺)`}
+        </p>
+        <p className={`font-mono text-5xl font-medium tracking-tight mb-6 ${devredenBakiye + netDurum >= 0 ? 'text-navy' : 'text-brick'}`}>
+          {(devredenBakiye + netDurum).toLocaleString('tr-TR')} ₺
+        </p>
 
         {(() => {
           const buAyOdenmemisBorc = planlananTaksitler.filter((p) => !p.gelecek).reduce((s, p) => s + p.tutar, 0)
@@ -691,7 +666,7 @@ function GelirGiderPageIc() {
               </p>
             )}
           </div>
-          <div className={`rounded-lg p-4 border ${netDurum >= 0 ? 'bg-sage-soft border-sage' : 'bg-brick-soft border-brick'}`}>
+          <div className="bg-white rounded-lg p-4 border border-border">
             <p className="text-xs text-muted mb-1">Bu Ay Net</p>
             <p className={`font-mono text-lg font-medium ${netDurum >= 0 ? 'text-sage' : 'text-brick'}`}>
               {netDurum.toLocaleString('tr-TR')} ₺
@@ -876,6 +851,8 @@ function GelirGiderPageIc() {
           </div>
         )}
       </main>
+
+      <AltNavigasyon aktif="gelir-gider" />
 
       <OnayModal
         acik={onayAcik}
