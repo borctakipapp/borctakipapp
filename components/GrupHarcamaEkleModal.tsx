@@ -15,7 +15,7 @@ function bugunMetniGrup() {
   return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`
 }
 
-export default function GrupHarcamaEkleModal({ grupId }: { grupId: string }) {
+export default function GrupHarcamaEkleModal({ grupId, onBasarili }: { grupId: string; onBasarili?: () => void }) {
   const { goster } = useToast()
   const router = useRouter()
   const supabase = createClient()
@@ -81,7 +81,7 @@ export default function GrupHarcamaEkleModal({ grupId }: { grupId: string }) {
     setLoading(false)
     sifirlaVeKapat()
     goster('Harcama eklendi.')
-    router.refresh()
+    ;(onBasarili ? onBasarili() : router.refresh())
   }
 
   return (

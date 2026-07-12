@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import Monogram from '@/components/Monogram'
 import OnayModal from '@/components/OnayModal'
+import Modal from '@/components/Modal'
 import PastaGrafik from '@/components/PastaGrafik'
 import SohbetModal from '@/components/SohbetModal'
 import GrupHarcamaEkleModal from '@/components/GrupHarcamaEkleModal'
@@ -100,6 +101,20 @@ export default function GrupDetayPage() {
   }, [grupId])
 
   useEffect(() => { fetchData() }, [fetchData])
+
+  // Canlı güncelleme: bu grupla ilgili herhangi bir tabloda (harcama, üye, ödeme, bölüşüm)
+  // değişiklik olunca — başka bir sekmeden/kullanıcıdan gelse bile — sayfa otomatik yenilenir.
+  useEffect(() => {
+    const kanal = supabase
+      .channel(`grup-canli-${grupId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'grup_harcamalar', filter: `grup_id=eq.${grupId}` }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'grup_uyeler', filter: `grup_id=eq.${grupId}` }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'grup_odemeler', filter: `grup_id=eq.${grupId}` }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'grup_harcama_bolusumu' }, () => fetchData())
+      .subscribe()
+
+    return () => { supabase.removeChannel(kanal) }
+  }, [grupId, fetchData])
 
   async function gercekGrubuSil() {
     setOnaySilGrupAcik(false)
@@ -224,7 +239,7 @@ export default function GrupDetayPage() {
       )}
 
       <div className="flex gap-2 mb-2">
-        <GrupHarcamaEkleModal grupId={grupId} />
+        <GrupHarcamaEkleModal grupId={grupId} onBasarili={fetchData} />
         <SohbetModal grupId={grupId} grupAdi={grupAdi} />
       </div>
       <button onClick={davetLinkiKopyala} className="w-full bg-white border border-border text-navy text-xs font-medium rounded-lg py-2 mb-5 hover:bg-paper transition-colors">
@@ -265,69 +280,87 @@ export default function GrupDetayPage() {
             <div className="flex flex-col gap-2">
               {uyeler.map((u) => {
                 const b = bakiyeler.find((bk) => bk.userId === u.user_id)
-                const benimBorclarim = oneriler.filter((o) => o.borcluId === u.user_id)
-                const banaBorclu = oneriler.filter((o) => o.alacakliId === u.user_id)
-                const acik = acikKisi === u.user_id
-                const hareketVar = benimBorclarim.length > 0 || banaBorclu.length > 0
+                const hareketVar = oneriler.some((o) => o.borcluId === u.user_id || o.alacakliId === u.user_id)
                 if (!hareketVar) return null
 
                 return (
-                  <div key={u.user_id} className="bg-white rounded-lg border border-border overflow-hidden">
-                    <button
-                      onClick={() => setAcikKisi(acik ? null : u.user_id)}
-                      className="w-full p-3 flex items-center gap-3 text-left"
-                    >
-                      <Monogram isim={u.ad_soyad || '?'} boyut={30} />
-                      <p className="text-sm text-navy flex-1 truncate">{u.ad_soyad}</p>
-                      {b && Math.abs(b.net) > 0.5 && (
-                        <span className={`font-mono text-xs ${b.net >= 0 ? 'text-sage' : 'text-brick'}`}>
-                          {b.net >= 0 ? '+' : ''}{b.net.toLocaleString('tr-TR')} ₺
-                        </span>
-                      )}
-                      <span className="text-muted text-xs">{acik ? '▲' : '▼'}</span>
-                    </button>
-
-                    {acik && (
-                      <div className="border-t border-border px-3 py-3 flex flex-col gap-2 bg-paper/50">
-                        {benimBorclarim.map((o, i) => {
-                          const alacakli = uyeler.find((uu) => uu.user_id === o.alacakliId)
-                          return (
-                            <div key={`b-${i}`} className="bg-white rounded-lg p-3 border border-brick/30">
-                              <p className="text-xs text-navy">
-                                <b>{o.borcluAd}</b> → <b>{o.alacakliAd}</b>'a <span className="font-mono">{o.tutar.toLocaleString('tr-TR')} ₺</span> ödemeli
-                              </p>
-                              {alacakli?.iban ? (
-                                <button
-                                  onClick={() => ibanKopyala(alacakli.iban!)}
-                                  className="text-[11px] text-navy font-mono mt-1.5 flex items-center gap-1.5 hover:text-sage transition-colors"
-                                >
-                                  📋 {ibanFormatla(alacakli.iban)} {ibanKopyalandi === alacakli.iban ? '· Kopyalandı ✓' : '· kopyala'}
-                                </button>
-                              ) : (
-                                <p className="text-[11px] text-muted mt-1.5">Bu kişi henüz IBAN eklemedi.</p>
-                              )}
-                              {(o.borcluId === mevcutKullaniciId || o.alacakliId === mevcutKullaniciId) && (
-                                <button onClick={() => mutabakatTikla(o)} className="text-xs text-sage underline mt-2 block">
-                                  Ödendi İşaretle
-                                </button>
-                              )}
-                            </div>
-                          )
-                        })}
-                        {banaBorclu.map((o, i) => (
-                          <div key={`a-${i}`} className="bg-white rounded-lg p-3 border border-sage/30">
-                            <p className="text-xs text-navy">
-                              <b>{o.borcluAd}</b>, <b>{o.alacakliAd}</b>'dan <span className="font-mono">{o.tutar.toLocaleString('tr-TR')} ₺</span> alacaklı
-                            </p>
-                          </div>
-                        ))}
-                      </div>
+                  <button
+                    key={u.user_id}
+                    onClick={() => setAcikKisi(u.user_id)}
+                    className="w-full bg-white rounded-lg border border-border p-3 flex items-center gap-3 text-left hover:shadow-sm transition-shadow"
+                  >
+                    <Monogram isim={u.ad_soyad || '?'} boyut={30} />
+                    <p className="text-sm text-navy flex-1 truncate">{u.ad_soyad}</p>
+                    {b && Math.abs(b.net) > 0.5 && (
+                      <span className={`font-mono text-xs ${b.net >= 0 ? 'text-sage' : 'text-brick'}`}>
+                        {b.net >= 0 ? '+' : ''}{b.net.toLocaleString('tr-TR')} ₺
+                      </span>
                     )}
-                  </div>
+                    <span className="text-muted text-xs">›</span>
+                  </button>
                 )
               })}
             </div>
           )}
+
+          {/* Kişi detay modalı — tek paylaşılan modal, seçili kişiye göre içerik gösteriyor.
+              İçerik `oneriler`'den (canlı state'ten) türediği için Realtime ile otomatik güncel kalır. */}
+          {(() => {
+            const seciliKisi = uyeler.find((u) => u.user_id === acikKisi)
+            const benimBorclarimSecili = acikKisi ? oneriler.filter((o) => o.borcluId === acikKisi) : []
+            const banaBorcluSecili = acikKisi ? oneriler.filter((o) => o.alacakliId === acikKisi) : []
+            return (
+              <Modal acik={!!seciliKisi} baslik={seciliKisi?.ad_soyad || ''} onKapat={() => setAcikKisi(null)}>
+                {benimBorclarimSecili.length > 0 && (
+                  <div className="mb-4">
+                    <h3 className="text-xs font-medium text-muted uppercase tracking-wide mb-2">Borçlu Olduğu Kişiler</h3>
+                    <div className="flex flex-col gap-2">
+                      {benimBorclarimSecili.map((o, i) => {
+                        const alacakli = uyeler.find((uu) => uu.user_id === o.alacakliId)
+                        return (
+                          <div key={`b-${i}`} className="bg-white rounded-lg p-3 border border-brick/30">
+                            <p className="text-xs text-navy">
+                              <b>{o.borcluAd}</b> → <b>{o.alacakliAd}</b>'a <span className="font-mono">{o.tutar.toLocaleString('tr-TR')} ₺</span> ödemeli
+                            </p>
+                            {alacakli?.iban ? (
+                              <button
+                                onClick={() => ibanKopyala(alacakli.iban!)}
+                                className="text-[11px] text-navy font-mono mt-1.5 flex items-center gap-1.5 hover:text-sage transition-colors"
+                              >
+                                📋 {ibanFormatla(alacakli.iban)} {ibanKopyalandi === alacakli.iban ? '· Kopyalandı ✓' : '· kopyala'}
+                              </button>
+                            ) : (
+                              <p className="text-[11px] text-muted mt-1.5">Bu kişi henüz IBAN eklemedi.</p>
+                            )}
+                            {(o.borcluId === mevcutKullaniciId || o.alacakliId === mevcutKullaniciId) && (
+                              <button onClick={() => mutabakatTikla(o)} className="text-xs text-sage underline mt-2 block">
+                                Ödendi İşaretle
+                              </button>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {banaBorcluSecili.length > 0 && (
+                  <div>
+                    <h3 className="text-xs font-medium text-muted uppercase tracking-wide mb-2">Alacaklı Olduğu Kişiler</h3>
+                    <div className="flex flex-col gap-2">
+                      {banaBorcluSecili.map((o, i) => (
+                        <div key={`a-${i}`} className="bg-white rounded-lg p-3 border border-sage/30">
+                          <p className="text-xs text-navy">
+                            <b>{o.alacakliAd}</b>, <b>{o.borcluAd}</b>'dan <span className="font-mono">{o.tutar.toLocaleString('tr-TR')} ₺</span> alacaklı
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </Modal>
+            )
+          })()}
         </>
       )}
 
