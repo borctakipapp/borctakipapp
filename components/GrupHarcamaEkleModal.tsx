@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Secim from './Secim'
 import Modal from './Modal'
+import { hataMesajiCevir } from '@/lib/hata-mesaji'
+import { useToast } from './Toast'
 
 type Uye = { user_id: string; ad_soyad: string | null }
 
@@ -14,6 +16,7 @@ function bugunMetniGrup() {
 }
 
 export default function GrupHarcamaEkleModal({ grupId }: { grupId: string }) {
+  const { goster } = useToast()
   const router = useRouter()
   const supabase = createClient()
   const [acik, setAcik] = useState(false)
@@ -66,17 +69,18 @@ export default function GrupHarcamaEkleModal({ grupId }: { grupId: string }) {
     const { data: harcama, error } = await supabase
       .from('grup_harcamalar').insert({ grup_id: grupId, odeyen_id: odeyenId, aciklama, tutar: tutarSayi, tarih }).select().single()
 
-    if (error || !harcama) { setMessage('Hata: ' + (error?.message || 'Harcama eklenemedi.')); setLoading(false); return }
+    if (error || !harcama) { setMessage(error ? hataMesajiCevir(error) : 'Harcama eklenemedi.'); setLoading(false); return }
 
     const kisiBasi = Math.round((tutarSayi / secilenUyeler.size) * 100) / 100
     const bolusumler = Array.from(secilenUyeler).map((uid) => ({ harcama_id: harcama.id, user_id: uid, pay_tutari: kisiBasi }))
 
     const { error: bolusumError } = await supabase.from('grup_harcama_bolusumu').insert(bolusumler)
 
-    if (bolusumError) { setMessage('Hata: ' + bolusumError.message); setLoading(false); return }
+    if (bolusumError) { setMessage(hataMesajiCevir(bolusumError)); setLoading(false); return }
 
     setLoading(false)
     sifirlaVeKapat()
+    goster('Harcama eklendi.')
     router.refresh()
   }
 

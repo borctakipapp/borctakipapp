@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Modal from './Modal'
+import { hataMesajiCevir } from '@/lib/hata-mesaji'
 
 type Satir = {
   type: 'income' | 'expense' | null
@@ -114,7 +115,7 @@ export default function CSVIceAktarModal({ onBasarili }: { onBasarili?: () => vo
 
     setYukleniyor(false)
     if (error) {
-      setMessage('Hata: ' + error.message)
+      setMessage(hataMesajiCevir(error))
     } else {
       sifirlaVeKapat()
       (onBasarili ? onBasarili() : router.refresh())

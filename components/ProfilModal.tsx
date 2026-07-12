@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { TURKIYE_IL_ILCE, TURKIYE_ILLERI } from '@/lib/turkiye-il-ilce'
 import Secim from './Secim'
 import Modal from './Modal'
+import { hataMesajiCevir } from '@/lib/hata-mesaji'
 
 const CINSIYET_SECENEKLERI = ['Kadın', 'Erkek', 'Belirtmek istemiyorum']
 const GELIR_ARALIKLARI = ['15.000 ₺ altı', '15.000 - 25.000 ₺', '25.000 - 40.000 ₺', '40.000 - 60.000 ₺', '60.000 ₺ ve üzeri', 'Belirtmek istemiyorum']
@@ -62,7 +63,7 @@ export default function ProfilModal({ tetikleyici }: { tetikleyici: React.ReactN
     })
 
     setSaving(false)
-    setMessage(error ? 'Hata: ' + error.message : 'Kaydedildi.')
+    setMessage(error ? hataMesajiCevir(error) : 'Kaydedildi.')
   }
 
   return (

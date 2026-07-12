@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import Monogram from '@/components/Monogram'
 import BorcEkleModal from '@/components/BorcEkleModal'
 import BorcDetayModal from '@/components/BorcDetayModal'
+import PastaGrafik from '@/components/PastaGrafik'
 
 const KATEGORI_ETIKET: Record<string, string> = {
   kredi_karti: 'Kredi Kartı',
@@ -14,6 +15,18 @@ const KATEGORI_ETIKET: Record<string, string> = {
   kisisel: 'Kişisel Borç',
   taksitli_alisveris: 'Taksitli Alışveriş',
   diger: 'Diğer',
+}
+
+const KATEGORI_RENK: Record<string, string> = {
+  kredi_karti: '#B5533C',
+  ihtiyac_kredisi: '#D98E3F',
+  konut_kredisi: '#1B2A4A',
+  tasit_kredisi: '#5B7FA6',
+  fatura: '#8B6BA8',
+  kira: '#4A7C74',
+  kisisel: '#C77B8E',
+  taksitli_alisveris: '#6B8E4E',
+  diger: '#6b6f7a',
 }
 
 const KATEGORI_IKON: Record<string, string> = {
@@ -49,6 +62,15 @@ export default async function BorclarPage() {
 
   const toplamBorc = (debts || []).reduce((sum, d) => sum + Number(d.remaining_amount), 0)
 
+  const kategoriDagilimi = Object.entries(
+    (debts || []).reduce((acc: Record<string, number>, d) => {
+      acc[d.category] = (acc[d.category] || 0) + Number(d.remaining_amount)
+      return acc
+    }, {})
+  )
+    .map(([kategori, tutar]) => ({ ad: KATEGORI_ETIKET[kategori] || kategori, tutar, renk: KATEGORI_RENK[kategori] || '#6b6f7a' }))
+    .sort((a, b) => b.tutar - a.tutar)
+
   return (
     <main className="max-w-2xl mx-auto px-6 py-10 pb-24 md:pb-10">
         <p className="text-sm text-muted mb-1">Toplam Borcun</p>
@@ -62,6 +84,15 @@ export default async function BorclarPage() {
         <div className="mb-8">
           <BorcEkleModal />
         </div>
+
+        {kategoriDagilimi.length > 1 && (
+          <>
+            <h2 className="text-sm font-medium text-muted mb-3">Kategoriye Göre Dağılım</h2>
+            <div className="bg-white rounded-lg border border-border p-5 mb-8">
+              <PastaGrafik dilimler={kategoriDagilimi} />
+            </div>
+          </>
+        )}
 
         <h2 className="text-sm font-medium text-muted mb-3">Borçlarınız</h2>
 

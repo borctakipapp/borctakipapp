@@ -7,6 +7,8 @@ import OnayModal from './OnayModal'
 import Secim from './Secim'
 import Modal from './Modal'
 import Monogram from './Monogram'
+import { useToast } from './Toast'
+import { hataMesajiCevir } from '@/lib/hata-mesaji'
 
 const KATEGORILER = [
   { value: 'kredi_karti', label: 'Kredi Kartı' }, { value: 'ihtiyac_kredisi', label: 'İhtiyaç Kredisi' },
@@ -74,6 +76,9 @@ export default function BorcDetayModal({ debtId, tetikleyici, onBasarili }: { de
   const [onaySilBorcAcik, setOnaySilBorcAcik] = useState(false)
   const [onayTamamAcik, setOnayTamamAcik] = useState(false)
   const [onaySilOdemeAcik, setOnaySilOdemeAcik] = useState(false)
+  const [onayOdemeAcik, setOnayOdemeAcik] = useState(false)
+  const [bekleyenOdeme, setBekleyenOdeme] = useState<{ tutar: number; turu: 'plan' | 'custom'; adet?: number } | null>(null)
+  const { goster } = useToast()
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -145,22 +150,41 @@ export default function BorcDetayModal({ debtId, tetikleyici, onBasarili }: { de
       p_yeni_due_date: yeniDueDate || null, p_yeni_status: yeniKalan <= 0 ? 'paid' : 'active',
     })
 
-    if (error) { setMessage('Hata: ' + error.message); setProcessing(false); return }
+    if (error) { setMessage(hataMesajiCevir(error)); setProcessing(false); return }
     setProcessing(false)
     setPaymentAmount(''); setCustomMode(false)
     fetchData()
-    (onBasarili ? onBasarili() : router.refresh())
+    goster(`${odenenTutar.toLocaleString('tr-TR')} ₺ ödeme kaydedildi.`)
+    ;(onBasarili ? onBasarili() : router.refresh())
   }
 
-  async function handleSelectedPay() { await odemeYap(secilenToplamTutar, 'plan', selectedInstallments.size) }
-  async function handleCustomPay(e: React.FormEvent) { e.preventDefault(); await odemeYap(parseFloat(paymentAmount), 'custom') }
+  function handleSelectedPay() {
+    if (selectedInstallments.size === 0) return
+    setBekleyenOdeme({ tutar: secilenToplamTutar, turu: 'plan', adet: selectedInstallments.size })
+    setOnayOdemeAcik(true)
+  }
+
+  function handleCustomPay(e: React.FormEvent) {
+    e.preventDefault()
+    const tutar = parseFloat(paymentAmount)
+    if (!tutar || tutar <= 0) { setMessage('Geçerli bir tutar gir.'); return }
+    setBekleyenOdeme({ tutar, turu: 'custom' })
+    setOnayOdemeAcik(true)
+  }
+
+  async function gercekOdemeyiYap() {
+    if (!bekleyenOdeme) return
+    setOnayOdemeAcik(false)
+    await odemeYap(bekleyenOdeme.tutar, bekleyenOdeme.turu, bekleyenOdeme.adet)
+    setBekleyenOdeme(null)
+  }
 
   async function gercekTamaminiOde() {
     setOnayTamamAcik(false); setProcessing(true)
     const { error } = await supabase.from('debts').update({ status: 'paid', remaining_amount: 0 }).eq('id', debtId)
     setProcessing(false)
-    if (error) setMessage('Hata: ' + error.message)
-    else { setAcik(false); (onBasarili ? onBasarili() : router.refresh()) }
+    if (error) setMessage(hataMesajiCevir(error))
+    else { goster('Borç ödendi olarak işaretlendi.'); setAcik(false); (onBasarili ? onBasarili() : router.refresh()) }
   }
 
   function toggleTogglePaymentSelection(paymentId: string) {
@@ -194,9 +218,10 @@ export default function BorcDetayModal({ debtId, tetikleyici, onBasarili }: { de
       p_yeni_taksit_kalan: yeniKalanTaksit, p_yeni_due_date: yeniDueDateSil || null, p_yeni_status: yeniKalanTutar > 0 ? 'active' : 'paid',
     })
     setProcessing(false)
-    if (error) { setMessage('Hata: ' + error.message); return }
+    if (error) { setMessage(hataMesajiCevir(error)); return }
     fetchData()
-    (onBasarili ? onBasarili() : router.refresh())
+    goster('Seçilen ödemeler geri alındı.')
+    ;(onBasarili ? onBasarili() : router.refresh())
   }
 
   async function handleUpdate(e: React.FormEvent) {
@@ -209,15 +234,15 @@ export default function BorcDetayModal({ debtId, tetikleyici, onBasarili }: { de
       principal_amount: principalAmount ? parseFloat(principalAmount) : null,
       due_date: dueDate || null, prepayment_strategy: prepaymentStrategy,
     }).eq('id', debtId)
-    if (error) { setMessage('Hata: ' + error.message); setSaving(false) }
-    else { setSaving(false); fetchData(); (onBasarili ? onBasarili() : router.refresh()) }
+    if (error) { setMessage(hataMesajiCevir(error)); setSaving(false) }
+    else { setSaving(false); fetchData(); goster('Değişiklikler kaydedildi.'); (onBasarili ? onBasarili() : router.refresh()) }
   }
 
   async function gercekBorcuSil() {
     setOnaySilBorcAcik(false); setSaving(true)
     const { error } = await supabase.from('debts').delete().eq('id', debtId)
-    if (error) { setMessage('Hata: ' + error.message); setSaving(false) }
-    else { setSaving(false); setAcik(false); (onBasarili ? onBasarili() : router.refresh()) }
+    if (error) { setMessage(hataMesajiCevir(error)); setSaving(false) }
+    else { setSaving(false); setAcik(false); goster('Borç silindi.'); (onBasarili ? onBasarili() : router.refresh()) }
   }
 
   return (
@@ -441,6 +466,15 @@ export default function BorcDetayModal({ debtId, tetikleyici, onBasarili }: { de
       <OnayModal acik={onaySilBorcAcik} baslik="Emin misin?" mesaj="Bu borcu silmek istediğine emin misin?" onOnayla={gercekBorcuSil} onVazgec={() => setOnaySilBorcAcik(false)} />
       <OnayModal acik={onayTamamAcik} baslik="Emin misin?" mesaj="Bu borcu tamamen ödendi olarak işaretlemek istediğine emin misin?" onayMetni="Evet, Ödendi" tehlikeli={false} onOnayla={gercekTamaminiOde} onVazgec={() => setOnayTamamAcik(false)} />
       <OnayModal acik={onaySilOdemeAcik} baslik="Emin misin?" mesaj={`${selectedPayments.size} ödeme kaydını silmek istediğine emin misin?`} onOnayla={gercekOdemeleriSil} onVazgec={() => setOnaySilOdemeAcik(false)} />
+      <OnayModal
+        acik={onayOdemeAcik}
+        baslik="Ödemeyi onayla"
+        mesaj={bekleyenOdeme ? `${bekleyenOdeme.tutar.toLocaleString('tr-TR', { maximumFractionDigits: 2 })} ₺ ödeme kaydetmek istediğine emin misin?` : ''}
+        onayMetni="Evet, Öde"
+        tehlikeli={false}
+        onOnayla={gercekOdemeyiYap}
+        onVazgec={() => { setOnayOdemeAcik(false); setBekleyenOdeme(null) }}
+      />
     </>
   )
 }

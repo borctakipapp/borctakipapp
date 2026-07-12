@@ -4,8 +4,11 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Modal from './Modal'
+import { hataMesajiCevir } from '@/lib/hata-mesaji'
+import { useToast } from './Toast'
 
 export default function GrupOlusturModal() {
+  const { goster } = useToast()
   const router = useRouter()
   const supabase = createClient()
   const [acik, setAcik] = useState(false)
@@ -30,7 +33,7 @@ export default function GrupOlusturModal() {
     const { data: grup, error } = await supabase.from('gruplar').insert({ ad: ad.trim(), olusturan_id: user.id }).select().single()
 
     if (error || !grup) {
-      setMessage('Hata: ' + (error?.message || 'Grup oluşturulamadı.'))
+      setMessage(error ? hataMesajiCevir(error) : 'Grup oluşturulamadı.')
       setLoading(false)
       return
     }
@@ -38,13 +41,14 @@ export default function GrupOlusturModal() {
     const { error: uyeError } = await supabase.from('grup_uyeler').insert({ grup_id: grup.id, user_id: user.id, ad_soyad: user.email })
 
     if (uyeError) {
-      setMessage('Hata: ' + uyeError.message)
+      setMessage(hataMesajiCevir(uyeError))
       setLoading(false)
       return
     }
 
     setLoading(false)
     sifirlaVeKapat()
+    goster('Grup oluşturuldu.')
     router.push(`/dashboard/gruplar/${grup.id}`)
     router.refresh()
   }

@@ -4,8 +4,11 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Modal from './Modal'
+import { hataMesajiCevir } from '@/lib/hata-mesaji'
+import { useToast } from './Toast'
 
 export default function BirikimEkleModal() {
+  const { goster } = useToast()
   const router = useRouter()
   const supabase = createClient()
   const [acik, setAcik] = useState(false)
@@ -36,11 +39,12 @@ export default function BirikimEkleModal() {
     })
 
     if (error) {
-      setMessage('Hata: ' + error.message)
+      setMessage(hataMesajiCevir(error))
       setLoading(false)
     } else {
       setLoading(false)
       sifirlaVeKapat()
+      goster('Hedef eklendi.')
       router.refresh()
     }
   }

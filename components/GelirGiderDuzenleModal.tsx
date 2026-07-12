@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import Secim from './Secim'
 import Modal from './Modal'
 import OnayModal from './OnayModal'
+import { hataMesajiCevir } from '@/lib/hata-mesaji'
 
 const GELIR_KATEGORILERI = ['Maaş', 'Ek Gelir', 'Kira Geliri', 'Yatırım Geliri', 'Birikimden Çekim', 'Diğer Gelir']
 const GIDER_KATEGORILERI = ['Market/Gıda', 'Ulaşım', 'Eğlence', 'Sağlık', 'Giyim', 'Eğitim', 'Kişisel Bakım', 'Birikim Aktarımı', 'Diğer Gider']
@@ -68,7 +69,7 @@ export default function GelirGiderDuzenleModal({ txId, onBasarili }: { txId: str
     }).eq('id', txId)
 
     if (error) {
-      setMessage('Hata: ' + error.message)
+      setMessage(hataMesajiCevir(error))
       setSaving(false)
     } else {
       setSaving(false)
@@ -82,7 +83,7 @@ export default function GelirGiderDuzenleModal({ txId, onBasarili }: { txId: str
     setSaving(true)
     const { error } = await supabase.from('transactions').delete().eq('id', txId)
     if (error) {
-      setMessage('Hata: ' + error.message)
+      setMessage(hataMesajiCevir(error))
       setSaving(false)
     } else {
       setSaving(false)

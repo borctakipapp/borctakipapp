@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import BildirimZili from '@/components/BildirimZili'
 import AltNavigasyon from '@/components/AltNavigasyon'
 import ProfilModal from '@/components/ProfilModal'
+import { ToastProvider } from '@/components/Toast'
 import { SEKMELER, type SekmeKey } from '@/components/AppHeader'
 
 function aktifSekmeBul(pathname: string): SekmeKey {
@@ -20,6 +21,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const aktif = aktifSekmeBul(pathname)
 
   return (
+    <ToastProvider>
     <div className="min-h-screen bg-paper md:flex">
       <aside className="hidden md:flex md:flex-col md:w-60 md:shrink-0 bg-navy min-h-screen sticky top-0 self-start">
         <div className="px-5 py-5">
@@ -86,5 +88,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <AltNavigasyon aktif={aktif} />
       </div>
     </div>
+    </ToastProvider>
   )
 }

@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Secim from './Secim'
 import Modal from './Modal'
+import { hataMesajiCevir } from '@/lib/hata-mesaji'
+import { useToast } from './Toast'
 
 const KATEGORILER = [
   { value: 'kredi_karti', label: 'Kredi Kartı' },
@@ -27,6 +29,7 @@ const KATEGORI_ALANLAR: Record<string, { taksit: boolean; faiz: boolean; tekTuta
 }
 
 export default function BorcEkleModal() {
+  const { goster } = useToast()
   const [acik, setAcik] = useState(false)
   const [category, setCategory] = useState('kredi_karti')
   const [institutionName, setInstitutionName] = useState('')
@@ -78,11 +81,12 @@ export default function BorcEkleModal() {
     })
 
     if (error) {
-      setMessage('Hata: ' + error.message)
+      setMessage(hataMesajiCevir(error))
       setLoading(false)
     } else {
       setLoading(false)
       sifirlaVeKapat()
+      goster('Borç eklendi.')
       router.refresh()
     }
   }

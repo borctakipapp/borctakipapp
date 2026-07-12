@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import OnayModal from './OnayModal'
 import Secim from './Secim'
 import Modal from './Modal'
+import { hataMesajiCevir } from '@/lib/hata-mesaji'
 
 const GELIR_KATEGORILERI = ['Maaş', 'Ek Gelir', 'Kira Geliri', 'Yatırım Geliri', 'Diğer Gelir']
 const GIDER_KATEGORILERI = ['Market/Gıda', 'Ulaşım', 'Eğlence', 'Sağlık', 'Giyim', 'Eğitim', 'Kişisel Bakım', 'Diğer Gider']
@@ -101,7 +102,7 @@ export default function DuzenliIslemlerModal({ onBasarili }: { onBasarili?: () =
     }).eq('id', itemId)
 
     setSaving(false)
-    if (error) { setMessage('Hata: ' + error.message) } else { setEditingId(null); fetchItems(); (onBasarili ? onBasarili() : router.refresh()) }
+    if (error) { setMessage(hataMesajiCevir(error)) } else { setEditingId(null); fetchItems(); (onBasarili ? onBasarili() : router.refresh()) }
   }
 
   async function toggleActive(itemId: string, current: boolean) {

@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import MaasOnboardingBanner from '@/components/MaasOnboardingBanner'
 import BirikimHedefModal from '@/components/BirikimHedefModal'
 import BorcDetayModal from '@/components/BorcDetayModal'
+import CubukGrafik from '@/components/CubukGrafik'
 
 const KATEGORI_RENK: Record<string, string> = {
   'Market/Gıda': '#B5533C', 'Ulaşım': '#D98E3F', 'Eğlence': '#7f8ba0', 'Sağlık': '#1B2A4A',
@@ -204,6 +205,26 @@ export default async function OzetPage() {
     if (!veriVar) break
     if (net >= 0) streakAySayisi++
     else break
+  }
+
+  // Son 6 ay ödeme trendi (grafik için) — tek sorguda, N+1 sorgu yapmadan
+  const AY_KISALTMALARI = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara']
+  const odemeTrendi: { etiket: string; tutar: number }[] = []
+  if (debtIds.length > 0) {
+    const altiAyOncekiTarih = new Date(yil, ay - 5, 1)
+    const altiAyBaslangicStr = `${altiAyOncekiTarih.getFullYear()}-${ikiBasamakOz(altiAyOncekiTarih.getMonth() + 1)}-01T00:00:00`
+
+    const { data: sonAltiAyOdemeVerisi } = await supabase
+      .from('payments').select('amount, paid_at').in('debt_id', debtIds).gte('paid_at', altiAyBaslangicStr)
+
+    for (let i = 5; i >= 0; i--) {
+      const tarih = new Date(yil, ay - i, 1)
+      const ayAnahtari = `${tarih.getFullYear()}-${ikiBasamakOz(tarih.getMonth() + 1)}`
+      const toplam = (sonAltiAyOdemeVerisi || [])
+        .filter((p) => p.paid_at.slice(0, 7) === ayAnahtari)
+        .reduce((s, p) => s + Number(p.amount), 0)
+      odemeTrendi.push({ etiket: AY_KISALTMALARI[tarih.getMonth()], tutar: toplam })
+    }
   }
 
   const rozetler = [
@@ -413,6 +434,15 @@ export default async function OzetPage() {
             <p className="text-sm text-muted">Şu an takip edilecek yaklaşan bir şey yok — güzel bir gün!</p>
           )}
         </div>
+
+        {odemeTrendi.length > 0 && odemeTrendi.some((o) => o.tutar > 0) && (
+          <>
+            <h2 className="text-sm font-medium text-muted mb-3">Son 6 Ay Ödeme Trendi</h2>
+            <div className="bg-white rounded-lg border border-border p-5 mb-8">
+              <CubukGrafik veriler={odemeTrendi} renk="#1B2A4A" />
+            </div>
+          </>
+        )}
 
         {/* Rozetler */}
         <h2 className="text-sm font-medium text-muted mb-3">Başarılarım</h2>

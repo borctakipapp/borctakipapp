@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Secim from './Secim'
 import Modal from './Modal'
+import { useToast } from './Toast'
+import { hataMesajiCevir } from '@/lib/hata-mesaji'
 
 const GELIR_KATEGORILERI = ['Maaş', 'Ek Gelir', 'Kira Geliri', 'Yatırım Geliri', 'Birikimden Çekim', 'Diğer Gelir']
 const GIDER_KATEGORILERI = ['Market/Gıda', 'Ulaşım', 'Eğlence', 'Sağlık', 'Giyim', 'Eğitim', 'Kişisel Bakım', 'Birikim Aktarımı', 'Diğer Gider']
@@ -16,6 +18,7 @@ function bugun() {
 function ikiBasamak(n: number) { return String(n).padStart(2, '0') }
 
 export default function GelirGiderEkleModal({ hedefAy, hedefYil, onBasarili }: { hedefAy: number; hedefYil: number; onBasarili?: () => void }) {
+  const { goster } = useToast()
   const router = useRouter()
   const supabase = createClient()
   const [acik, setAcik] = useState(false)
@@ -104,11 +107,12 @@ export default function GelirGiderEkleModal({ hedefAy, hedefYil, onBasarili }: {
     })
 
     if (error) {
-      setMessage('Hata: ' + error.message)
+      setMessage(hataMesajiCevir(error))
       setLoading(false)
     } else {
       setLoading(false)
       sifirlaVeKapat()
+      goster('Kayıt eklendi.')
       onBasarili ? onBasarili() : router.refresh()
     }
   }

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import OnayModal from './OnayModal'
 import Modal from './Modal'
+import { hataMesajiCevir } from '@/lib/hata-mesaji'
 
 type Entry = { id: string; amount: number; type: 'add' | 'withdraw'; created_at: string }
 
@@ -67,10 +68,10 @@ export default function BirikimHedefModal({ goalId, tetikleyici }: { goalId: str
         p_transaction_date: bugunMetniBirikim(), p_description: goalName, p_is_recurring: false,
         p_recurring_id: null, p_goal_id: goalId, p_goal_direction: 'withdraw',
       })
-      if (error) { setMessage('Hata: ' + error.message); setAddingEntry(false); return }
+      if (error) { setMessage(hataMesajiCevir(error)); setAddingEntry(false); return }
     } else {
       const { error } = await supabase.rpc('birikim_hareket_ekle', { p_goal_id: goalId, p_amount: tutar, p_type: entryType })
-      if (error) { setMessage('Hata: ' + error.message); setAddingEntry(false); return }
+      if (error) { setMessage(hataMesajiCevir(error)); setAddingEntry(false); return }
     }
 
     setEntryAmount('')
@@ -87,7 +88,7 @@ export default function BirikimHedefModal({ goalId, tetikleyici }: { goalId: str
       goal_name: goalName, target_amount: parseFloat(targetAmount), current_amount: parseFloat(currentAmount), target_date: targetDate || null,
     }).eq('id', goalId)
 
-    if (error) { setMessage('Hata: ' + error.message); setSaving(false) }
+    if (error) { setMessage(hataMesajiCevir(error)); setSaving(false) }
     else { setSaving(false); setAcik(false); router.refresh() }
   }
 
@@ -95,7 +96,7 @@ export default function BirikimHedefModal({ goalId, tetikleyici }: { goalId: str
     setOnayAcik(false)
     setSaving(true)
     const { error } = await supabase.from('savings_goals').delete().eq('id', goalId)
-    if (error) { setMessage('Hata: ' + error.message); setSaving(false) }
+    if (error) { setMessage(hataMesajiCevir(error)); setSaving(false) }
     else { setSaving(false); setAcik(false); router.refresh() }
   }
 
