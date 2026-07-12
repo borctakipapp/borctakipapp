@@ -49,7 +49,7 @@ export default async function AdminKullaniciDetayPage({
 
   return (
     <div className="min-h-screen bg-paper">
-      <header className="bg-navy px-6 py-4 flex items-center justify-between">
+      <header className="bg-navy px-6 py-4 flex items-center justify-between sticky top-0 z-20">
         <span className="text-paper font-medium text-sm tracking-wide">borctakipapp · admin</span>
         <Link href="/admin/kullanicilar" className="text-paper/70 hover:text-paper text-xs border border-paper/30 rounded-md px-3 py-1.5 transition-colors">
           ← Kullanıcılara dön

@@ -57,7 +57,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </aside>
 
       <div className="flex-1 md:min-w-0">
-        <header className="md:hidden bg-navy px-6 py-4 flex items-center justify-between">
+        <header className="md:hidden bg-navy px-6 py-4 flex items-center justify-between sticky top-0 z-30">
           <span className="text-paper font-medium text-sm tracking-wide">borctakipapp</span>
           <div className="flex items-center gap-3">
             <ProfilModal

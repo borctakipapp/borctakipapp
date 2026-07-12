@@ -3,6 +3,8 @@ import Link from 'next/link'
 import { adminGirisKontrol, adminYetkiKontrol, adminTumYetkileriGetir, TUM_YETKILER } from '@/lib/admin-auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import YetkiDuzenleModal from '@/components/YetkiDuzenleModal'
+import YeniAdminEkleModal from '@/components/YeniAdminEkleModal'
+import AdminYetkisiKaldirButonu from '@/components/AdminYetkisiKaldirButonu'
 
 export default async function YetkiYonetimiPage() {
   await adminGirisKontrol()
@@ -11,7 +13,6 @@ export default async function YetkiYonetimiPage() {
 
   const admin = createAdminClient()
   const { data: kullanicilar } = await admin.auth.admin.listUsers({ perPage: 1000 })
-  const adminler = (kullanicilar?.users || []).filter((u) => (u.user_metadata as any)?.is_admin || u.email === 'borctakipapp@gmail.com')
 
   // profiles tablosundan is_admin=true olanları çekmek daha güvenilir — auth metadata'ya güvenmeyelim
   const { data: adminProfilleri } = await admin.from('profiles').select('id, full_name').eq('is_admin', true)
@@ -31,13 +32,17 @@ export default async function YetkiYonetimiPage() {
 
   return (
     <div className="min-h-screen bg-paper">
-      <header className="bg-navy px-6 py-4 flex items-center justify-between">
+      <header className="bg-navy px-6 py-4 flex items-center justify-between sticky top-0 z-20">
         <Link href="/admin" className="text-paper/70 hover:text-paper text-sm">← Admin Paneline Dön</Link>
       </header>
 
       <main className="max-w-3xl mx-auto px-6 py-10">
         <h1 className="text-xl font-medium text-navy mb-1">Yetki Yönetimi</h1>
         <p className="text-sm text-muted mb-6">Adminlere hangi işlemleri yapabileceklerini tek tek belirle.</p>
+
+        <div className="mb-6">
+          <YeniAdminEkleModal />
+        </div>
 
         <div className="flex flex-col gap-3">
           {satirlar.map((s) => (
@@ -47,7 +52,12 @@ export default async function YetkiYonetimiPage() {
                   <p className="text-sm font-medium text-navy">{s.adSoyad || s.email}</p>
                   <p className="text-xs text-muted">{s.email}{s.kurucuMu && ' · Kurucu hesap'}</p>
                 </div>
-                {!s.kurucuMu && <YetkiDuzenleModal userId={s.id} mevcutYetkiler={s.yetkiler} />}
+                {!s.kurucuMu && (
+                  <div className="flex items-center gap-3">
+                    <YetkiDuzenleModal userId={s.id} mevcutYetkiler={s.yetkiler} />
+                    <AdminYetkisiKaldirButonu userId={s.id} email={s.email} />
+                  </div>
+                )}
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {TUM_YETKILER.map((y) => (
