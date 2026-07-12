@@ -11,10 +11,12 @@ export default async function GruplarPage() {
 
   const { data: uyelikler } = await supabase
     .from('grup_uyeler')
-    .select('grup_id, gruplar(id, ad, davet_kodu, created_at)')
+    .select('grup_id, aktif, gruplar(id, ad, davet_kodu, created_at)')
     .eq('user_id', user.id)
 
-  const gruplar = (uyelikler || []).map((u: any) => u.gruplar).filter(Boolean)
+  const gruplar = (uyelikler || [])
+    .map((u: any) => (u.gruplar ? { ...u.gruplar, aktif: u.aktif } : null))
+    .filter(Boolean)
 
   return (
           <main className="max-w-2xl mx-auto px-6 py-10 pb-24 md:pb-10">
@@ -35,11 +37,14 @@ export default async function GruplarPage() {
               <Link
                 key={g.id}
                 href={`/dashboard/gruplar/${g.id}`}
-                className="bg-white rounded-lg p-4 border border-border hover:shadow-sm transition-shadow flex items-center gap-3"
+                className={`bg-white rounded-lg p-4 border border-border hover:shadow-sm transition-shadow flex items-center gap-3 ${!g.aktif ? 'opacity-60' : ''}`}
               >
                 <Monogram isim={g.ad} boyut={38} />
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium text-navy text-sm truncate">{g.ad}</p>
+                  <p className="font-medium text-navy text-sm truncate">
+                    {g.ad}
+                    {!g.aktif && <span className="ml-2 text-[10px] text-muted font-normal align-middle">· Ayrıldın</span>}
+                  </p>
                   <p className="text-xs text-muted mt-0.5">{new Date(g.created_at).toLocaleDateString('tr-TR')} tarihinde oluşturuldu</p>
                 </div>
               </Link>

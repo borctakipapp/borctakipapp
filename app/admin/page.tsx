@@ -73,6 +73,7 @@ export default async function AdminPage() {
       <nav className="bg-navy-light px-6 py-2 flex gap-4">
         <span className="text-paper text-sm font-medium border-b-2 border-paper pb-1">Genel Bakış</span>
         <Link href="/admin/kullanicilar" className="text-paper/60 hover:text-paper text-sm pb-1">Kullanıcılar</Link>
+        <Link href="/admin/yetkiler" className="text-paper/60 hover:text-paper text-sm pb-1">Yetki Yönetimi</Link>
       </nav>
 
       <main className="max-w-3xl mx-auto px-6 py-10">

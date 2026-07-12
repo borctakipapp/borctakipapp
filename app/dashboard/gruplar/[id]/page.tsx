@@ -239,6 +239,8 @@ export default function GrupDetayPage() {
   const bakiyeler = bakiyeHesapla(harcamalar, bolusumler, odemeler, uyeler)
   const oneriler = mutabakatOner(bakiyeler)
   const benimBakiyem = bakiyeler.find((b) => b.userId === mevcutKullaniciId)
+  const benimUyelik = uyeler.find((u) => u.user_id === mevcutKullaniciId)
+  const benimAktifim = benimUyelik ? benimUyelik.aktif : true
 
   const harcamaDilimleri = uyeler
     .map((u) => ({
@@ -271,6 +273,13 @@ export default function GrupDetayPage() {
         </div>
       </div>
 
+      {!benimAktifim && (
+        <div className="bg-amber-soft border border-amber rounded-lg p-3 mt-3 mb-3">
+          <p className="text-xs text-amber font-medium">Bu gruptan ayrıldın</p>
+          <p className="text-[11px] text-muted mt-0.5">Geçmişi görebilirsin ama yeni harcama ekleyemez, mesaj gönderemezsin.</p>
+        </div>
+      )}
+
       {benimBakiyem && (
         <div className={`rounded-lg p-3 border mt-3 mb-3 flex items-center justify-between ${benimBakiyem.net >= 0 ? 'bg-sage-soft border-sage' : 'bg-brick-soft border-brick'}`}>
           <div>
@@ -287,13 +296,17 @@ export default function GrupDetayPage() {
         </div>
       )}
 
-      <div className="flex gap-2 mb-2">
-        <GrupHarcamaEkleModal grupId={grupId} onBasarili={fetchData} />
-        <SohbetModal grupId={grupId} grupAdi={grupAdi} />
-      </div>
-      <button onClick={davetLinkiKopyala} className="w-full bg-white border border-border text-navy text-xs font-medium rounded-lg py-2 mb-5 hover:bg-paper transition-colors">
-        {kopyalandi ? '✓ Kopyalandı' : '🔗 Davet Linkini Kopyala'}
-      </button>
+      {benimAktifim && (
+        <>
+          <div className="flex gap-2 mb-2">
+            <GrupHarcamaEkleModal grupId={grupId} onBasarili={fetchData} />
+            <SohbetModal grupId={grupId} grupAdi={grupAdi} />
+          </div>
+          <button onClick={davetLinkiKopyala} className="w-full bg-white border border-border text-navy text-xs font-medium rounded-lg py-2 mb-5 hover:bg-paper transition-colors">
+            {kopyalandi ? '✓ Kopyalandı' : '🔗 Davet Linkini Kopyala'}
+          </button>
+        </>
+      )}
 
       {/* Sekme geçişi — sayfa dikey uzamasın diye tek seferde tek bölüm gösteriliyor */}
       <div className="flex gap-1 bg-white border border-border rounded-lg p-1 mb-5">
@@ -390,7 +403,7 @@ export default function GrupDetayPage() {
                             ) : (
                               <p className="text-[11px] text-muted mt-1.5">Bu kişi henüz IBAN eklemedi.</p>
                             )}
-                            {(o.borcluId === mevcutKullaniciId || o.alacakliId === mevcutKullaniciId) && (
+                            {benimAktifim && (o.borcluId === mevcutKullaniciId || o.alacakliId === mevcutKullaniciId) && (
                               <button onClick={() => mutabakatTikla(o)} className="text-xs text-sage underline mt-2 block">
                                 {o.alacakliId === mevcutKullaniciId ? '✓ Aldım' : 'Ödedim'}
                               </button>
