@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -36,6 +36,7 @@ export default function GrupDetayPage() {
   const grupId = params.id as string
 
   const [loading, setLoading] = useState(true)
+  const ornekIdRef = useRef(Math.random().toString(36).slice(2))
   const [sekme, setSekme] = useState<Sekme>('genel')
   const [grupAdi, setGrupAdi] = useState('')
   const [davetKodu, setDavetKodu] = useState('')
@@ -111,7 +112,7 @@ export default function GrupDetayPage() {
   // değişiklik olunca — başka bir sekmeden/kullanıcıdan gelse bile — sayfa otomatik yenilenir.
   useEffect(() => {
     const kanal = supabase
-      .channel(`grup-canli-${grupId}`)
+      .channel(`grup-canli-${grupId}-${ornekIdRef.current}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'grup_harcamalar', filter: `grup_id=eq.${grupId}` }, () => fetchData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'grup_uyeler', filter: `grup_id=eq.${grupId}` }, () => fetchData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'grup_odemeler', filter: `grup_id=eq.${grupId}` }, () => fetchData())

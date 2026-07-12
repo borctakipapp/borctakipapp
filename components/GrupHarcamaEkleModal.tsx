@@ -32,7 +32,7 @@ export default function GrupHarcamaEkleModal({ grupId, onBasarili }: { grupId: s
   useEffect(() => {
     if (!acik) return
     async function fetchUyeler() {
-      const { data } = await supabase.from('grup_uyeler').select('user_id, ad_soyad').eq('grup_id', grupId)
+      const { data } = await supabase.from('grup_uyeler').select('user_id, ad_soyad').eq('grup_id', grupId).eq('aktif', true)
       setUyeler(data || [])
       setSecilenUyeler(new Set((data || []).map((u) => u.user_id)))
 
