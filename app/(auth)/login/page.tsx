@@ -21,8 +21,14 @@ function LoginPageIc() {
 
     if (mode === 'signup') {
       const { error } = await supabase.auth.signUp({ email, password })
-      if (error) setMessage('Hata: ' + error.message)
-      else setMessage('Kayıt başarılı! E-postanı kontrol edip doğrulama linkine tıkla.')
+      if (error) {
+        setMessage('Hata: ' + error.message)
+      } else {
+        // E-posta doğrulaması kapalı olduğu için kayıt sonrası kullanıcı zaten oturum açmış oluyor
+        const sonra = searchParams.get('sonra')
+        router.push(sonra || '/dashboard')
+        router.refresh()
+      }
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password })
       if (error) {
