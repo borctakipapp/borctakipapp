@@ -1,31 +1,55 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import Monogram from '@/components/Monogram'
 import BorcDetayModal from '@/components/BorcDetayModal'
+import DuzenliIslemlerModal from '@/components/DuzenliIslemlerModal'
 
-type YaklasanBorc = {
+type Bildirim = {
+  tur: 'borc' | 'duzenli'
   id: string
-  institution_name: string
-  remaining_amount: number
-  due_date: string
+  baslik: string
+  altBaslik: string
+  tutar: number
   gunKaldi: number
+}
+
+function sonrakiTarihHesapla(gun: number): Date {
+  const bugun = new Date()
+  const buAySonGun = new Date(bugun.getFullYear(), bugun.getMonth() + 1, 0).getDate()
+  const buAyGun = Math.min(gun, buAySonGun)
+  let hedef = new Date(bugun.getFullYear(), bugun.getMonth(), buAyGun)
+  hedef.setHours(0, 0, 0, 0)
+  const bugunSifirli = new Date(bugun)
+  bugunSifirli.setHours(0, 0, 0, 0)
+
+  if (hedef < bugunSifirli) {
+    const gelecekAyYil = bugun.getMonth() === 11 ? bugun.getFullYear() + 1 : bugun.getFullYear()
+    const gelecekAyAy = bugun.getMonth() === 11 ? 0 : bugun.getMonth() + 1
+    const gelecekAySonGun = new Date(gelecekAyYil, gelecekAyAy + 1, 0).getDate()
+    const gelecekAyGun = Math.min(gun, gelecekAySonGun)
+    hedef = new Date(gelecekAyYil, gelecekAyAy, gelecekAyGun)
+  }
+  return hedef
 }
 
 export default function BildirimZili() {
   const supabase = createClient()
   const [acik, setAcik] = useState(false)
   const [yukleniyor, setYukleniyor] = useState(true)
-  const [yaklasanlar, setYaklasanlar] = useState<YaklasanBorc[]>([])
+  const [bildirimler, setBildirimler] = useState<Bildirim[]>([])
   const kutuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    async function fetchYaklasanlar() {
+    async function fetchBildirimler() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { setYukleniyor(false); return }
 
+      const bugun = new Date()
+      bugun.setHours(0, 0, 0, 0)
+
+      // Borçlar
       const { data: debts } = await supabase
         .from('debts')
         .select('id, institution_name, remaining_amount, due_date')
@@ -33,23 +57,36 @@ export default function BildirimZili() {
         .eq('status', 'active')
         .not('due_date', 'is', null)
 
-      const bugun = new Date()
-      bugun.setHours(0, 0, 0, 0)
-
-      const liste: YaklasanBorc[] = (debts || [])
+      const borcListesi: Bildirim[] = (debts || [])
         .map((d) => {
           const [y, m, gun] = d.due_date.split('-').map(Number)
           const tarih = new Date(y, m - 1, gun)
           const gunKaldi = Math.round((tarih.getTime() - bugun.getTime()) / 86400000)
-          return { ...d, gunKaldi }
+          return { tur: 'borc' as const, id: d.id, baslik: d.institution_name, altBaslik: '', tutar: Number(d.remaining_amount), gunKaldi }
         })
-        .filter((d) => d.gunKaldi <= 5) // bugün + geciken + 5 gün içinde olanlar
-        .sort((a, b) => a.gunKaldi - b.gunKaldi)
+        .filter((d) => d.gunKaldi <= 5)
 
-      setYaklasanlar(liste)
+      // Düzenli işlemler (faturalar/giderler) — yaklaşan tekrar tarihini kendimiz hesaplıyoruz
+      const { data: duzenliler } = await supabase
+        .from('recurring_items')
+        .select('id, category, description, amount, day_of_month')
+        .eq('user_id', user.id)
+        .eq('type', 'expense')
+        .eq('active', true)
+
+      const duzenliListesi: Bildirim[] = (duzenliler || [])
+        .map((r) => {
+          const tarih = sonrakiTarihHesapla(r.day_of_month)
+          const gunKaldi = Math.round((tarih.getTime() - bugun.getTime()) / 86400000)
+          return { tur: 'duzenli' as const, id: r.id, baslik: r.category, altBaslik: r.description || '', tutar: Number(r.amount), gunKaldi }
+        })
+        .filter((d) => d.gunKaldi <= 5)
+
+      const hepsi = [...borcListesi, ...duzenliListesi].sort((a, b) => a.gunKaldi - b.gunKaldi)
+      setBildirimler(hepsi)
       setYukleniyor(false)
     }
-    fetchYaklasanlar()
+    fetchBildirimler()
   }, [])
 
   useEffect(() => {
@@ -62,7 +99,7 @@ export default function BildirimZili() {
 
   function gunEtiketi(gunKaldi: number) {
     if (gunKaldi < 0) return { metin: `${Math.abs(gunKaldi)} gün gecikti`, renk: 'text-brick' }
-    if (gunKaldi === 0) return { metin: 'Bugün son gün', renk: 'text-brick' }
+    if (gunKaldi === 0) return { metin: 'Bugün', renk: 'text-brick' }
     if (gunKaldi === 1) return { metin: 'Yarın', renk: 'text-amber' }
     return { metin: `${gunKaldi} gün kaldı`, renk: 'text-amber' }
   }
@@ -81,9 +118,9 @@ export default function BildirimZili() {
           <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
           <path d="M13.73 21a2 2 0 0 1-3.46 0" />
         </svg>
-        {!yukleniyor && yaklasanlar.length > 0 && (
+        {!yukleniyor && bildirimler.length > 0 && (
           <span className="absolute -top-0.5 -right-0.5 bg-brick text-white text-[10px] font-medium rounded-full w-4 h-4 flex items-center justify-center">
-            {yaklasanlar.length}
+            {bildirimler.length}
           </span>
         )}
       </button>
@@ -95,29 +132,33 @@ export default function BildirimZili() {
           </div>
           {yukleniyor ? (
             <p className="px-4 py-4 text-xs text-muted">Yükleniyor...</p>
-          ) : yaklasanlar.length === 0 ? (
+          ) : bildirimler.length === 0 ? (
             <p className="px-4 py-4 text-xs text-muted">Yaklaşan bir ödemen yok. 🎉</p>
           ) : (
             <div className="max-h-72 overflow-y-auto">
-              {yaklasanlar.map((y) => {
-                const etiket = gunEtiketi(y.gunKaldi)
+              {bildirimler.map((b) => {
+                const etiket = gunEtiketi(b.gunKaldi)
+                const satir = (
+                  <div className="flex items-center gap-2.5 px-4 py-2.5 hover:bg-paper transition-colors cursor-pointer">
+                    <Monogram isim={b.baslik} boyut={28} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-navy font-medium truncate">
+                        {b.baslik} {b.tur === 'duzenli' && <span className="text-[10px] text-muted">↻</span>}
+                      </p>
+                      <p className={`text-[11px] ${etiket.renk}`}>{etiket.metin}</p>
+                    </div>
+                    <span className="font-mono text-xs text-navy shrink-0">
+                      {b.tutar.toLocaleString('tr-TR')} ₺
+                    </span>
+                  </div>
+                )
                 return (
-                  <div key={y.id} onClick={() => setAcik(false)} className="border-b border-border last:border-0">
-                    <BorcDetayModal
-                      debtId={y.id}
-                      tetikleyici={
-                        <div className="flex items-center gap-2.5 px-4 py-2.5 hover:bg-paper transition-colors cursor-pointer">
-                          <Monogram isim={y.institution_name} boyut={28} />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm text-navy font-medium truncate">{y.institution_name}</p>
-                            <p className={`text-[11px] ${etiket.renk}`}>{etiket.metin}</p>
-                          </div>
-                          <span className="font-mono text-xs text-navy shrink-0">
-                            {Number(y.remaining_amount).toLocaleString('tr-TR')} ₺
-                          </span>
-                        </div>
-                      }
-                    />
+                  <div key={`${b.tur}-${b.id}`} onClick={() => setAcik(false)} className="border-b border-border last:border-0">
+                    {b.tur === 'borc' ? (
+                      <BorcDetayModal debtId={b.id} tetikleyici={satir} />
+                    ) : (
+                      <DuzenliIslemlerModal tetikleyiciOzel={satir} />
+                    )}
                   </div>
                 )
               })}

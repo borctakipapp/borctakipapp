@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import OnayModal from '@/components/OnayModal'
 import GelirGiderEkleModal from '@/components/GelirGiderEkleModal'
 import CSVIceAktarModal from '@/components/CSVIceAktarModal'
+import ButceLimitleriModal from '@/components/ButceLimitleriModal'
 import GelirGiderDuzenleModal from '@/components/GelirGiderDuzenleModal'
 import DuzenliIslemlerModal from '@/components/DuzenliIslemlerModal'
 import BorcDetayModal from '@/components/BorcDetayModal'
@@ -76,6 +77,7 @@ function GelirGiderPageIc() {
   const searchParams = useSearchParams()
   const [loading, setLoading] = useState(true)
   const [ilkYuklemeTamam, setIlkYuklemeTamam] = useState(false)
+  const [limitler, setLimitler] = useState<Record<string, number>>({})
   const [ay, setAy] = useState(() => {
     const p = searchParams.get('ay')
     return p !== null ? parseInt(p) : new Date().getMonth()
@@ -105,6 +107,11 @@ function GelirGiderPageIc() {
     setLoading(true)
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { router.push('/login'); return }
+
+    const { data: limitVerisi } = await supabase.from('harcama_limitleri').select('category, aylik_limit').eq('user_id', user.id)
+    const limitHaritasi: Record<string, number> = {}
+    ;(limitVerisi || []).forEach((l) => { limitHaritasi[l.category] = Number(l.aylik_limit) })
+    setLimitler(limitHaritasi)
 
     const baslangic = new Date(yil, ay, 1) // sadece payments (gerçek zaman damgası) sorguları için kullanılacak
     const bitis = new Date(yil, ay + 1, 1)
@@ -689,7 +696,36 @@ function GelirGiderPageIc() {
           <GelirGiderEkleModal hedefAy={ay} hedefYil={yil} onBasarili={fetchData} />
           <DuzenliIslemlerModal onBasarili={fetchData} />
           <CSVIceAktarModal onBasarili={fetchData} />
+          <ButceLimitleriModal onBasarili={fetchData} />
         </div>
+
+        {Object.keys(limitler).length > 0 && (
+          <div className="mb-8">
+            <h2 className="text-sm font-medium text-muted mb-3">Bütçe Limitlerim</h2>
+            <div className="bg-white rounded-lg p-4 border border-border flex flex-col gap-3">
+              {Object.entries(limitler).map(([kategori, limit]) => {
+                const harcanan = giderKategorileri.find((g) => g.label === kategori)?.tutar || 0
+                const oran = Math.min(100, (harcanan / limit) * 100)
+                const asildi = harcanan > limit
+                const renk = asildi ? 'bg-brick' : oran >= 80 ? 'bg-amber' : 'bg-sage'
+                return (
+                  <div key={kategori}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs text-navy">{kategori}</span>
+                      <span className={`font-mono text-xs ${asildi ? 'text-brick font-medium' : 'text-muted'}`}>
+                        {harcanan.toLocaleString('tr-TR', { maximumFractionDigits: 0 })} / {limit.toLocaleString('tr-TR', { maximumFractionDigits: 0 })} ₺
+                      </span>
+                    </div>
+                    <div className="h-2 bg-paper rounded-full overflow-hidden">
+                      <div style={{ width: `${oran}%` }} className={`h-full rounded-full ${renk}`} />
+                    </div>
+                    {asildi && <p className="text-[11px] text-brick mt-1">Bu kategorideki limitini {(harcanan - limit).toLocaleString('tr-TR', { maximumFractionDigits: 0 })} ₺ aştın.</p>}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         {giderKategorileri.length > 0 && (
           <div className="mb-8">

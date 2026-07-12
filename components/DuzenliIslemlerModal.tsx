@@ -24,7 +24,7 @@ type RecurringItem = {
   amount: number; day_of_month: number; active: boolean; start_date: string
 }
 
-export default function DuzenliIslemlerModal({ onBasarili }: { onBasarili?: () => void } = {}) {
+export default function DuzenliIslemlerModal({ onBasarili, tetikleyiciOzel }: { onBasarili?: () => void; tetikleyiciOzel?: React.ReactNode } = {}) {
   const router = useRouter()
   const supabase = createClient()
   const { goster } = useToast()
@@ -128,12 +128,16 @@ export default function DuzenliIslemlerModal({ onBasarili }: { onBasarili?: () =
 
   return (
     <>
-      <button
-        onClick={() => setAcik(true)}
-        className="bg-white border border-border text-navy text-sm font-medium rounded-lg px-4 py-2.5 hover:bg-paper transition-colors"
-      >
-        ↻ Düzenli İşlemler
-      </button>
+      {tetikleyiciOzel ? (
+        <span onClick={() => setAcik(true)} className="contents cursor-pointer">{tetikleyiciOzel}</span>
+      ) : (
+        <button
+          onClick={() => setAcik(true)}
+          className="bg-white border border-border text-navy text-sm font-medium rounded-lg px-4 py-2.5 hover:bg-paper transition-colors"
+        >
+          ↻ Düzenli İşlemler
+        </button>
+      )}
 
       <Modal acik={acik} baslik="Düzenli Gelir / Giderler" onKapat={() => setAcik(false)}>
         {loading ? (

@@ -9,6 +9,7 @@ import OnayModal from '@/components/OnayModal'
 import PastaGrafik from '@/components/PastaGrafik'
 import SohbetModal from '@/components/SohbetModal'
 import GrupHarcamaEkleModal from '@/components/GrupHarcamaEkleModal'
+import GrupHarcamaDuzenleModal from '@/components/GrupHarcamaDuzenleModal'
 import { bakiyeHesapla, mutabakatOner } from '@/lib/grup-hesap'
 import { ibanFormatla, ibanTemizle, ibanGecerliMi } from '@/lib/iban'
 import { useToast } from '@/components/Toast'
@@ -419,16 +420,27 @@ export default function GrupDetayPage() {
           <div className="flex flex-col gap-2">
             {harcamalar.map((h) => {
               const odeyen = uyeler.find((u) => u.user_id === h.odeyen_id)
+              const katilanSayisi = bolusumler.filter((b) => b.harcama_id === h.id).length
               return (
-                <div key={h.id} className="bg-white rounded-lg p-4 border border-border">
-                  <div className="flex items-center justify-between">
-                    <p className="font-medium text-navy text-sm">{h.aciklama}</p>
-                    <span className="font-mono text-navy text-sm">{Number(h.tutar).toLocaleString('tr-TR')} ₺</span>
-                  </div>
-                  <p className="text-xs text-muted mt-0.5">
-                    {odeyen?.ad_soyad || 'Bilinmeyen'} ödedi · {new Date(h.tarih).toLocaleDateString('tr-TR')}
-                  </p>
-                </div>
+                <GrupHarcamaDuzenleModal
+                  key={h.id}
+                  harcama={h}
+                  katilanSayisi={katilanSayisi || uyeler.length}
+                  tetikleyici={
+                    <div className="bg-white rounded-lg p-4 border border-border cursor-pointer hover:shadow-sm transition-shadow">
+                      <div className="flex items-center justify-between">
+                        <p className="font-medium text-navy text-sm">{h.aciklama}</p>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-navy text-sm">{Number(h.tutar).toLocaleString('tr-TR')} ₺</span>
+                          <span className="text-muted text-xs">✎</span>
+                        </div>
+                      </div>
+                      <p className="text-xs text-muted mt-0.5">
+                        {odeyen?.ad_soyad || 'Bilinmeyen'} ödedi · {new Date(h.tarih).toLocaleDateString('tr-TR')}
+                      </p>
+                    </div>
+                  }
+                />
               )
             })}
           </div>

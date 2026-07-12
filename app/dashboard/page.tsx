@@ -245,30 +245,30 @@ export default async function OzetPage() {
     skor += 40
   } else if (borcGelirOrani <= 0.35) {
     skor += 28
-    skorNedenleri.push('Borç/gelir oranın orta seviyede')
+    skorNedenleri.push('Borç/gelir oranın orta seviyede — takipte tut')
   } else if (borcGelirOrani <= 0.50) {
     skor += 12
-    skorNedenleri.push('Borç/gelir oranın yüksek')
+    skorNedenleri.push('Borç/gelir oranını azaltmaya odaklanmak iyi olur')
   } else {
-    skorNedenleri.push('Gelirinin yarısından fazlası borca gidiyor')
+    skorNedenleri.push('Borç yükün gelirine göre ağır — önceliğin borcu azaltmak olabilir')
   }
 
   if (gecikenSayisi === 0) {
     skor += 25
   } else {
-    skorNedenleri.push(`${gecikenSayisi} borcun gecikmiş durumda`)
+    skorNedenleri.push(`${gecikenSayisi} borcun gecikmiş — bugün bir göz atmaya değer`)
   }
 
   if (buAyNet >= 0) {
     skor += 20
   } else {
-    skorNedenleri.push('Bu ay giderin gelirini aştı')
+    skorNedenleri.push('Bu ay gider gelirden fazla oldu — geçici bir dalgalanma olabilir')
   }
 
   if (toplamBirikim > 0) {
     skor += 15
   } else {
-    skorNedenleri.push('Henüz bir birikimin yok')
+    skorNedenleri.push('Küçük bir birikim hedefi koymak iyi bir başlangıç olur')
   }
 
   skor = Math.max(0, Math.min(100, skor))
@@ -277,7 +277,7 @@ export default async function OzetPage() {
     ? { etiket: 'İyi', badge: 'bg-sage-soft text-sage', metin: 'text-sage', cubuk: 'bg-sage' }
     : skor >= 40
       ? { etiket: 'Orta', badge: 'bg-amber-soft text-amber', metin: 'text-amber', cubuk: 'bg-amber' }
-      : { etiket: 'Dikkat', badge: 'bg-brick-soft text-brick', metin: 'text-brick', cubuk: 'bg-brick' }
+      : { etiket: 'Gelişim Alanı', badge: 'bg-brick-soft text-brick', metin: 'text-brick', cubuk: 'bg-brick' }
 
   // Gider dağılımı (mini)
   const giderMap: Record<string, number> = {}
