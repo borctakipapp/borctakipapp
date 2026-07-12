@@ -11,6 +11,8 @@ import SohbetModal from '@/components/SohbetModal'
 import GrupHarcamaEkleModal from '@/components/GrupHarcamaEkleModal'
 import { bakiyeHesapla, mutabakatOner } from '@/lib/grup-hesap'
 import { ibanFormatla, ibanTemizle, ibanGecerliMi } from '@/lib/iban'
+import { useToast } from '@/components/Toast'
+import { hataMesajiCevir } from '@/lib/hata-mesaji'
 
 type Uye = { user_id: string; ad_soyad: string | null; iban: string | null }
 type Harcama = { id: string; odeyen_id: string; aciklama: string; tutar: number; tarih: string }
@@ -31,6 +33,10 @@ export default function GrupDetayPage() {
   const [loading, setLoading] = useState(true)
   const [grupAdi, setGrupAdi] = useState('')
   const [davetKodu, setDavetKodu] = useState('')
+  const [olusturanId, setOlusturanId] = useState('')
+  const [onaySilGrupAcik, setOnaySilGrupAcik] = useState(false)
+  const [silingGrup, setSilinGrup] = useState(false)
+  const { goster } = useToast()
   const [uyeler, setUyeler] = useState<Uye[]>([])
   const [harcamalar, setHarcamalar] = useState<Harcama[]>([])
   const [bolusumler, setBolusumler] = useState<{ user_id: string; pay_tutari: number; harcama_id: string }[]>([])
@@ -54,7 +60,7 @@ export default function GrupDetayPage() {
     setMevcutKullaniciId(user.id)
 
     const { data: grup } = await supabase.from('gruplar').select('*').eq('id', grupId).single()
-    if (grup) { setGrupAdi(grup.ad); setDavetKodu(grup.davet_kodu) }
+    if (grup) { setGrupAdi(grup.ad); setDavetKodu(grup.davet_kodu); setOlusturanId(grup.olusturan_id) }
 
     const { data: uyeVerisi } = await supabase.from('grup_uyeler').select('user_id, ad_soyad, iban').eq('grup_id', grupId)
     setUyeler(uyeVerisi || [])
@@ -80,6 +86,20 @@ export default function GrupDetayPage() {
   }, [grupId])
 
   useEffect(() => { fetchData() }, [fetchData])
+
+  async function gercekGrubuSil() {
+    setOnaySilGrupAcik(false)
+    setSilinGrup(true)
+    const { error } = await supabase.from('gruplar').delete().eq('id', grupId)
+    if (error) {
+      goster(hataMesajiCevir(error), 'hata')
+      setSilinGrup(false)
+    } else {
+      goster('Grup silindi.')
+      router.push('/dashboard/gruplar')
+      router.refresh()
+    }
+  }
 
   function davetLinkiKopyala() {
     navigator.clipboard.writeText(`${window.location.origin}/davet/${davetKodu}`)
@@ -140,6 +160,7 @@ export default function GrupDetayPage() {
     .sort((a, b) => b.tutar - a.tutar)
 
   return (
+    <>
     <main className="max-w-md mx-auto px-6 py-10 pb-24 md:pb-10">
       <Link href="/dashboard/gruplar" className="text-xs text-muted hover:text-navy mb-4 inline-block">
         ← Gruplara dön
@@ -168,9 +189,25 @@ export default function GrupDetayPage() {
           <GrupHarcamaEkleModal grupId={grupId} />
           <SohbetModal grupId={grupId} grupAdi={grupAdi} />
         </div>
-        <button onClick={davetLinkiKopyala} className="w-full bg-white border border-border text-navy text-sm font-medium rounded-lg py-2.5 mb-6 hover:bg-paper transition-colors">
+        <button onClick={davetLinkiKopyala} className="w-full bg-white border border-border text-navy text-sm font-medium rounded-lg py-2.5 mb-3 hover:bg-paper transition-colors">
           {kopyalandi ? '✓ Kopyalandı' : '🔗 Davet Linkini Kopyala'}
         </button>
+
+        {mevcutKullaniciId && olusturanId && mevcutKullaniciId === olusturanId && (
+          <details className="mb-6">
+            <summary className="text-xs text-muted cursor-pointer">Grup ayarları</summary>
+            <button
+              onClick={() => setOnaySilGrupAcik(true)}
+              disabled={silingGrup}
+              className="w-full mt-2 bg-brick-soft text-brick text-sm font-medium rounded-lg py-2.5 hover:opacity-80 transition-opacity disabled:opacity-60"
+            >
+              {silingGrup ? 'Siliniyor...' : 'Grubu Sil'}
+            </button>
+            <p className="text-[11px] text-muted mt-1.5">
+              Bu, grubu ve içindeki tüm harcama/mesaj geçmişini kalıcı olarak siler. Sadece grubu oluşturan kişi (sen) silebilir.
+            </p>
+          </details>
+        )}
 
         {/* IBAN düzenleme */}
         <div className="flex items-center justify-between mb-3">
@@ -306,6 +343,14 @@ export default function GrupDetayPage() {
         onOnayla={gercekMutabakatKaydet}
         onVazgec={() => setOnayAcik(false)}
       />
-    </main>
+
+      <OnayModal
+        acik={onaySilGrupAcik}
+        baslik="Grubu sil"
+        mesaj={`"${grupAdi}" grubunu ve içindeki tüm harcama/mesaj geçmişini kalıcı olarak silmek istediğine emin misin? Bu işlem geri alınamaz.`}
+        onOnayla={gercekGrubuSil}
+        onVazgec={() => setOnaySilGrupAcik(false)}
+      />
+    </>
   )
 }

@@ -548,6 +548,7 @@ function GelirGiderPageIc() {
   }
 
   return (
+    <>
     <main className={`max-w-2xl mx-auto px-6 py-10 pb-24 md:pb-10 transition-opacity ${loading ? 'opacity-50 pointer-events-none' : ''}`}>
 
         <div className="flex items-center justify-between mb-3">
@@ -850,7 +851,7 @@ function GelirGiderPageIc() {
         onOnayla={gercekTxSil}
         onVazgec={() => setOnayAcik(false)}
       />
-    
+    </>
   )
 }
 
