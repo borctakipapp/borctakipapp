@@ -102,6 +102,7 @@ function GelirGiderPageIc() {
   const [planlananIslemler, setPlanlananIslemler] = useState<PlanlananIslem[]>([])
   const [yilOzet, setYilOzet] = useState<Record<number, { gelir: number; gider: number }>>({})
   const [takvimAcik, setTakvimAcik] = useState(false)
+  const [sekme, setSekme] = useState<'buay' | 'butce' | 'islemler'>('buay')
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -589,6 +590,35 @@ function GelirGiderPageIc() {
           {(devredenBakiye + netDurum).toLocaleString('tr-TR')} ₺
         </p>
 
+        <div className="flex flex-wrap gap-2 mb-5">
+          <GelirGiderEkleModal hedefAy={ay} hedefYil={yil} onBasarili={fetchData} />
+          <DuzenliIslemlerModal onBasarili={fetchData} />
+          <CSVIceAktarModal onBasarili={fetchData} />
+          <ButceLimitleriModal onBasarili={fetchData} />
+        </div>
+
+        {/* Sekme geçişi — sayfa dikey uzamasın diye tek seferde tek bölüm gösteriliyor */}
+        <div className="flex gap-1 bg-white border border-border rounded-lg p-1 mb-6">
+          {[
+            { key: 'buay' as const, etiket: 'Bu Ay' },
+            { key: 'butce' as const, etiket: 'Bütçe & Grafik' },
+            { key: 'islemler' as const, etiket: `İşlemler (${transactions.length + planlananTaksitler.length + gercekOdemeler.length + planlananIslemler.length})` },
+          ].map((s) => (
+            <button
+              key={s.key}
+              onClick={() => setSekme(s.key)}
+              className={`flex-1 text-xs font-medium py-2 rounded-md transition-colors ${
+                sekme === s.key ? 'bg-navy text-paper' : 'text-muted hover:bg-paper'
+              }`}
+            >
+              {s.etiket}
+            </button>
+          ))}
+        </div>
+
+        {/* --- SEKME: BU AY --- */}
+        {sekme === 'buay' && (
+        <>
         {(() => {
           const buAyOdenmemisBorc = planlananTaksitler.filter((p) => !p.gelecek).reduce((s, p) => s + p.tutar, 0)
           if (buAyOdenmemisBorc <= 0) return null
@@ -691,14 +721,12 @@ function GelirGiderPageIc() {
             </p>
           </div>
         </div>
+        </>
+        )}
 
-        <div className="flex flex-wrap gap-2 mb-8">
-          <GelirGiderEkleModal hedefAy={ay} hedefYil={yil} onBasarili={fetchData} />
-          <DuzenliIslemlerModal onBasarili={fetchData} />
-          <CSVIceAktarModal onBasarili={fetchData} />
-          <ButceLimitleriModal onBasarili={fetchData} />
-        </div>
-
+        {/* --- SEKME: BÜTÇE & GRAFİK --- */}
+        {sekme === 'butce' && (
+        <>
         {Object.keys(limitler).length > 0 && (
           <div className="mb-8">
             <h2 className="text-sm font-medium text-muted mb-3">Bütçe Limitlerim</h2>
@@ -743,7 +771,15 @@ function GelirGiderPageIc() {
             </div>
           </div>
         )}
+        {Object.keys(limitler).length === 0 && giderKategorileri.length === 0 && (
+          <p className="text-muted text-sm bg-white rounded-lg p-4 border border-border">Henüz bütçe limiti veya gider verisi yok.</p>
+        )}
+        </>
+        )}
 
+        {/* --- SEKME: İŞLEMLER --- */}
+        {sekme === 'islemler' && (
+        <>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-medium text-muted">İşlemler</h2>
           {selectedTx.size > 0 && (
@@ -873,6 +909,8 @@ function GelirGiderPageIc() {
               </div>
             ))}
           </div>
+        )}
+        </>
         )}
       </main>
 
