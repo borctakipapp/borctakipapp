@@ -12,6 +12,7 @@ export default function SohbetModal({ grupId, grupAdi }: { grupId: string; grupA
   const supabase = createClient()
   const { goster } = useToast()
   const [acik, setAcik] = useState(false)
+  const ornekIdRef = useRef(Math.random().toString(36).slice(2))
   const [mesajlar, setMesajlar] = useState<Mesaj[]>([])
   const [yeniMesaj, setYeniMesaj] = useState('')
   const [mevcutKullaniciId, setMevcutKullaniciId] = useState('')
@@ -32,7 +33,7 @@ export default function SohbetModal({ grupId, grupAdi }: { grupId: string; grupA
     baslat()
 
     const kanal = supabase
-      .channel(`grup-sohbet-${grupId}`)
+      .channel(`grup-sohbet-${grupId}-${ornekIdRef.current}`)
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'grup_mesajlar', filter: `grup_id=eq.${grupId}` },

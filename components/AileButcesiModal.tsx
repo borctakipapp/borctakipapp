@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Modal from './Modal'
 import OnayModal from './OnayModal'
@@ -21,6 +21,7 @@ export default function AileButcesiModal() {
   const supabase = createClient()
   const { goster } = useToast()
   const [acik, setAcik] = useState(false)
+  const ornekIdRef = useRef(Math.random().toString(36).slice(2))
   const [loading, setLoading] = useState(true)
   const [mevcutKullaniciId, setMevcutKullaniciId] = useState('')
   const [baglanti, setBaglanti] = useState<Baglanti | null>(null)
@@ -82,7 +83,7 @@ export default function AileButcesiModal() {
   useEffect(() => {
     if (!acik || !mevcutKullaniciId) return
     const kanal = supabase
-      .channel(`aile-baglanti-${mevcutKullaniciId}`)
+      .channel(`aile-baglanti-${mevcutKullaniciId}-${ornekIdRef.current}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'aile_baglantilari' }, () => fetchData())
       .subscribe()
 

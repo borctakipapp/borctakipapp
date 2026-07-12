@@ -41,6 +41,10 @@ export default function BildirimZili() {
   const [bildirimler, setBildirimler] = useState<Bildirim[]>([])
   const [kullaniciId, setKullaniciId] = useState('')
   const kutuRef = useRef<HTMLDivElement>(null)
+  // BildirimZili, layout'ta hem mobil hem masaüstü sürümünde (CSS ile gizli/görünür) aynı anda
+  // DOM'da mevcut oluyor — iki ayrı örnek aynı Realtime kanal ismini kullanırsa Supabase istemcisi
+  // çakışıp hata veriyordu. Her örneğe kendi rastgele kimliğini veriyoruz.
+  const ornekIdRef = useRef(Math.random().toString(36).slice(2))
 
   const fetchBildirimler = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -99,7 +103,7 @@ export default function BildirimZili() {
   useEffect(() => {
     if (!kullaniciId) return
     const kanal = supabase
-      .channel(`bildirimler-${kullaniciId}`)
+      .channel(`bildirimler-${kullaniciId}-${ornekIdRef.current}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'debts', filter: `user_id=eq.${kullaniciId}` }, () => fetchBildirimler())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'recurring_items', filter: `user_id=eq.${kullaniciId}` }, () => fetchBildirimler())
       .subscribe()
