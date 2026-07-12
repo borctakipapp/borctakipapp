@@ -118,7 +118,7 @@ export default function CSVIceAktarModal({ onBasarili }: { onBasarili?: () => vo
       setMessage(hataMesajiCevir(error))
     } else {
       sifirlaVeKapat()
-      (onBasarili ? onBasarili() : router.refresh())
+      ;(onBasarili ? onBasarili() : router.refresh())
     }
   }
 

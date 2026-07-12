@@ -74,7 +74,7 @@ export default function GelirGiderDuzenleModal({ txId, onBasarili }: { txId: str
     } else {
       setSaving(false)
       setAcik(false)
-      (onBasarili ? onBasarili() : router.refresh())
+      ;(onBasarili ? onBasarili() : router.refresh())
     }
   }
 
@@ -88,7 +88,7 @@ export default function GelirGiderDuzenleModal({ txId, onBasarili }: { txId: str
     } else {
       setSaving(false)
       setAcik(false)
-      (onBasarili ? onBasarili() : router.refresh())
+      ;(onBasarili ? onBasarili() : router.refresh())
     }
   }
 

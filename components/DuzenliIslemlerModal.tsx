@@ -81,7 +81,7 @@ export default function DuzenliIslemlerModal({ onBasarili }: { onBasarili?: () =
     setSelectedItems(new Set())
     setDeletingSelected(false)
     fetchItems()
-    (onBasarili ? onBasarili() : router.refresh())
+    ;(onBasarili ? onBasarili() : router.refresh())
   }
 
   function baslaDuzenle(item: RecurringItem) {
@@ -108,7 +108,7 @@ export default function DuzenliIslemlerModal({ onBasarili }: { onBasarili?: () =
   async function toggleActive(itemId: string, current: boolean) {
     await supabase.from('recurring_items').update({ active: !current }).eq('id', itemId)
     fetchItems()
-    (onBasarili ? onBasarili() : router.refresh())
+    ;(onBasarili ? onBasarili() : router.refresh())
   }
 
   function deleteItem(itemId: string) {
@@ -116,7 +116,7 @@ export default function DuzenliIslemlerModal({ onBasarili }: { onBasarili?: () =
       setOnayAcik(false)
       await supabase.from('recurring_items').delete().eq('id', itemId)
       fetchItems()
-      (onBasarili ? onBasarili() : router.refresh())
+      ;(onBasarili ? onBasarili() : router.refresh())
     })
   }
 
