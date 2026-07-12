@@ -1,8 +1,7 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import AppHeader from '@/components/AppHeader'
-import AltNavigasyon from '@/components/AltNavigasyon'
+import AppSayfaDuzeni from '@/components/AppSayfaDuzeni'
 import Monogram from '@/components/Monogram'
 
 export default async function BirikimPage() {
@@ -19,8 +18,7 @@ export default async function BirikimPage() {
   const toplamBiriken = (hedefler || []).reduce((s, h) => s + Number(h.current_amount), 0)
 
   return (
-    <div className="min-h-screen bg-paper">
-      <AppHeader aktif="birikim" />
+    <AppSayfaDuzeni aktif="birikim">
 <main className="max-w-2xl mx-auto px-6 py-10 pb-24 md:pb-10">
         <p className="text-sm text-muted mb-1">Toplam Birikimin</p>
         <p className="font-mono text-5xl font-medium text-navy tracking-tight mb-2">
@@ -83,8 +81,6 @@ export default async function BirikimPage() {
           })}
         </div>
       </main>
-
-      <AltNavigasyon aktif="birikim" />
-    </div>
+    </AppSayfaDuzeni>
   )
 }

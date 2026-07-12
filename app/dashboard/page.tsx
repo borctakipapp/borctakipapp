@@ -1,8 +1,7 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import AppHeader from '@/components/AppHeader'
-import AltNavigasyon from '@/components/AltNavigasyon'
+import AppSayfaDuzeni from '@/components/AppSayfaDuzeni'
 import MaasOnboardingBanner from '@/components/MaasOnboardingBanner'
 
 const KATEGORI_RENK: Record<string, string> = {
@@ -226,8 +225,7 @@ export default async function OzetPage() {
   const enBuyukGider = Math.max(...giderListesi.map((g) => g.tutar), 1)
 
   return (
-    <div className="min-h-screen bg-paper">
-      <AppHeader aktif="ozet" />
+    <AppSayfaDuzeni aktif="ozet">
 <main className="max-w-2xl mx-auto px-6 py-10 pb-24 md:pb-10">
         <p className="text-lg text-navy mb-6">Merhaba{ilkIsim ? `, ${ilkIsim}` : ''} 👋</p>
 
@@ -399,8 +397,6 @@ export default async function OzetPage() {
           </details>
         )}
       </main>
-
-      <AltNavigasyon aktif="ozet" />
-    </div>
+    </AppSayfaDuzeni>
   )
 }

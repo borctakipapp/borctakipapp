@@ -1,9 +1,9 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import AppHeader from '@/components/AppHeader'
-import AltNavigasyon from '@/components/AltNavigasyon'
+import AppSayfaDuzeni from '@/components/AppSayfaDuzeni'
 import Monogram from '@/components/Monogram'
+import BorcEkleModal from '@/components/BorcEkleModal'
 
 const KATEGORI_ETIKET: Record<string, string> = {
   kredi_karti: 'Kredi Kartı',
@@ -51,8 +51,7 @@ export default async function BorclarPage() {
   const toplamBorc = (debts || []).reduce((sum, d) => sum + Number(d.remaining_amount), 0)
 
   return (
-    <div className="min-h-screen bg-paper">
-      <AppHeader aktif="borclar" />
+    <AppSayfaDuzeni aktif="borclar">
 <main className="max-w-2xl mx-auto px-6 py-10 pb-24 md:pb-10">
         <p className="text-sm text-muted mb-1">Toplam Borcun</p>
         <p className="font-mono text-5xl font-medium text-navy tracking-tight mb-2">
@@ -62,12 +61,9 @@ export default async function BorclarPage() {
           {debts && debts.length > 0 ? `Toplam ${debts.length} aktif borcun var.` : 'Henüz aktif borcun yok.'}
         </p>
 
-        <Link
-          href="/dashboard/borc/ekle"
-          className="inline-block mb-8 bg-navy text-paper text-sm font-medium rounded-lg px-4 py-2.5 hover:bg-navy-light transition-colors"
-        >
-          + Yeni Borç Ekle
-        </Link>
+        <div className="mb-8">
+          <BorcEkleModal />
+        </div>
 
         <h2 className="text-sm font-medium text-muted mb-3">Borçlarınız</h2>
 
@@ -107,8 +103,6 @@ export default async function BorclarPage() {
           })}
         </div>
       </main>
-
-      <AltNavigasyon aktif="borclar" />
-    </div>
+    </AppSayfaDuzeni>
   )
 }

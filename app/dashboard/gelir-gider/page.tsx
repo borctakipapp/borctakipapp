@@ -4,8 +4,7 @@ import { useState, useEffect, useCallback, Suspense } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import AppHeader from '@/components/AppHeader'
-import AltNavigasyon from '@/components/AltNavigasyon'
+import AppSayfaDuzeni from '@/components/AppSayfaDuzeni'
 import OnayModal from '@/components/OnayModal'
 import Secim from '@/components/Secim'
 
@@ -543,8 +542,7 @@ function GelirGiderPageIc() {
   }
 
   return (
-    <div className="min-h-screen bg-paper">
-      <AppHeader aktif="gelir-gider" />
+    <AppSayfaDuzeni aktif="gelir-gider">
 <main className="max-w-2xl mx-auto px-6 py-10 pb-24 md:pb-10">
 
         <div className="flex items-center justify-between mb-3">
@@ -859,8 +857,6 @@ function GelirGiderPageIc() {
         )}
       </main>
 
-      <AltNavigasyon aktif="gelir-gider" />
-
       <OnayModal
         acik={onayAcik}
         baslik="Emin misin?"
@@ -872,7 +868,7 @@ function GelirGiderPageIc() {
         onOnayla={gercekTxSil}
         onVazgec={() => setOnayAcik(false)}
       />
-    </div>
+    </AppSayfaDuzeni>
   )
 }
 
