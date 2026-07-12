@@ -8,7 +8,7 @@ import Skeleton from './Skeleton'
 import { useToast } from './Toast'
 import { hataMesajiCevir } from '@/lib/hata-mesaji'
 
-const GIDER_KATEGORILERI = ['Market/Gıda', 'Ulaşım', 'Eğlence', 'Sağlık', 'Giyim', 'Eğitim', 'Kişisel Bakım', 'Diğer Gider']
+const GIDER_KATEGORILERI = ['Market/Gıda', 'Ulaşım', 'Eğlence', 'Sağlık', 'Giyim', 'Eğitim', 'Kişisel Bakım', 'Ortak Hesap', 'Diğer Gider']
 
 type Limit = { category: string; aylik_limit: number }
 

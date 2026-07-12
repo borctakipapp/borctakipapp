@@ -18,7 +18,7 @@ import { useToast } from '@/components/Toast'
 import { hataMesajiCevir } from '@/lib/hata-mesaji'
 import Skeleton from '@/components/Skeleton'
 
-type Uye = { user_id: string; ad_soyad: string | null; iban: string | null }
+type Uye = { user_id: string; ad_soyad: string | null; iban: string | null; aktif: boolean }
 type Harcama = { id: string; odeyen_id: string; aciklama: string; tutar: number; tarih: string }
 type Sekme = 'genel' | 'uyeler' | 'harcamalar'
 
@@ -42,6 +42,10 @@ export default function GrupDetayPage() {
   const [olusturanId, setOlusturanId] = useState('')
   const [onaySilGrupAcik, setOnaySilGrupAcik] = useState(false)
   const [silingGrup, setSilinGrup] = useState(false)
+  const [cikarilacakUye, setCikarilacakUye] = useState<{ id: string; ad: string } | null>(null)
+  const [onayCikarAcik, setOnayCikarAcik] = useState(false)
+  const [onayAyrilAcik, setOnayAyrilAcik] = useState(false)
+  const [islemYukleniyor, setIslemYukleniyor] = useState(false)
   const { goster } = useToast()
   const [uyeler, setUyeler] = useState<Uye[]>([])
   const [harcamalar, setHarcamalar] = useState<Harcama[]>([])
@@ -68,7 +72,7 @@ export default function GrupDetayPage() {
     const { data: grup } = await supabase.from('gruplar').select('*').eq('id', grupId).single()
     if (grup) { setGrupAdi(grup.ad); setDavetKodu(grup.davet_kodu); setOlusturanId(grup.olusturan_id) }
 
-    const { data: uyeVerisi } = await supabase.from('grup_uyeler').select('user_id, ad_soyad, iban').eq('grup_id', grupId)
+    const { data: uyeVerisi } = await supabase.from('grup_uyeler').select('user_id, ad_soyad, iban, aktif').eq('grup_id', grupId)
     let guncelUyeler = uyeVerisi || []
     const benimKaydim = guncelUyeler.find((u) => u.user_id === user.id)
     if (benimKaydim) setIbanGirisi(benimKaydim.iban ? ibanFormatla(benimKaydim.iban) : '')
@@ -131,6 +135,40 @@ export default function GrupDetayPage() {
     }
   }
 
+  function uyeCikarTikla(userId: string, ad: string) {
+    setCikarilacakUye({ id: userId, ad })
+    setOnayCikarAcik(true)
+  }
+
+  async function gercekUyeCikar() {
+    if (!cikarilacakUye) return
+    setOnayCikarAcik(false)
+    setIslemYukleniyor(true)
+    const { error } = await supabase.from('grup_uyeler').update({ aktif: false }).eq('grup_id', grupId).eq('user_id', cikarilacakUye.id)
+    setIslemYukleniyor(false)
+    if (error) {
+      goster(hataMesajiCevir(error), 'hata')
+    } else {
+      goster(`${cikarilacakUye.ad} gruptan çıkarıldı.`)
+      setCikarilacakUye(null)
+      fetchData()
+    }
+  }
+
+  async function gercekAyril() {
+    setOnayAyrilAcik(false)
+    setIslemYukleniyor(true)
+    const { error } = await supabase.from('grup_uyeler').update({ aktif: false }).eq('grup_id', grupId).eq('user_id', mevcutKullaniciId)
+    setIslemYukleniyor(false)
+    if (error) {
+      goster(hataMesajiCevir(error), 'hata')
+    } else {
+      goster('Gruptan ayrıldın.')
+      router.push('/dashboard/gruplar')
+      router.refresh()
+    }
+  }
+
   function davetLinkiKopyala() {
     navigator.clipboard.writeText(`${window.location.origin}/davet/${davetKodu}`)
     setKopyalandi(true)
@@ -169,9 +207,18 @@ export default function GrupDetayPage() {
   async function gercekMutabakatKaydet() {
     if (!mutabakatSecili) return
     setOnayAcik(false)
-    await supabase.from('grup_odemeler').insert({
+    const { data: odeme, error } = await supabase.from('grup_odemeler').insert({
       grup_id: grupId, odeyen_id: mutabakatSecili.borcluId, alan_id: mutabakatSecili.alacakliId, tutar: mutabakatSecili.tutar,
-    })
+    }).select().single()
+
+    if (!error && odeme) {
+      // Borçlunun kişisel gideri + alacaklının kişisel geliri otomatik oluşturuluyor (güvenli RPC üzerinden)
+      await supabase.rpc('grup_mutabakat_islemler_ekle', {
+        p_odeme_id: odeme.id, p_borclu_id: mutabakatSecili.borcluId, p_alacakli_id: mutabakatSecili.alacakliId,
+        p_tutar: mutabakatSecili.tutar, p_grup_id: grupId,
+      })
+    }
+
     goster('Mutabakat kaydedildi.')
     fetchData()
   }
@@ -344,7 +391,7 @@ export default function GrupDetayPage() {
                             )}
                             {(o.borcluId === mevcutKullaniciId || o.alacakliId === mevcutKullaniciId) && (
                               <button onClick={() => mutabakatTikla(o)} className="text-xs text-sage underline mt-2 block">
-                                Ödendi İşaretle
+                                {o.alacakliId === mevcutKullaniciId ? '✓ Aldım' : 'Ödedim'}
                               </button>
                             )}
                           </div>
@@ -403,15 +450,17 @@ export default function GrupDetayPage() {
 
           <h2 className="text-sm font-medium text-muted mb-3">Tüm Üyeler</h2>
           <div className="flex flex-col gap-2 mb-6">
-            {uyeler.map((u) => {
+            {uyeler.filter((u) => u.aktif).map((u) => {
               const b = bakiyeler.find((bk) => bk.userId === u.user_id)
               const benimMi = u.user_id === mevcutKullaniciId
+              const benOlusturanMiyim = mevcutKullaniciId === olusturanId
+              const buKisiOlusturanMi = u.user_id === olusturanId
               return (
                 <div key={u.user_id} className="bg-white rounded-lg p-3 border border-border flex items-center gap-3">
                   <Monogram isim={u.ad_soyad || '?'} boyut={36} />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-navy font-medium truncate">
-                      {u.ad_soyad}{benimMi && <span className="text-muted font-normal"> (Sen)</span>}
+                      {u.ad_soyad}{benimMi && <span className="text-muted font-normal"> (Sen)</span>}{buKisiOlusturanMi && <span className="text-muted font-normal"> · kurucu</span>}
                     </p>
                     {u.iban ? (
                       <button
@@ -431,6 +480,18 @@ export default function GrupDetayPage() {
                     <span className={`font-mono text-xs shrink-0 ${b.net >= 0 ? 'text-sage' : 'text-brick'}`}>
                       {b.net >= 0 ? '+' : ''}{b.net.toLocaleString('tr-TR')} ₺
                     </span>
+                  )}
+                  {/* Kurucu, kendisi hariç herkesi çıkarabilir */}
+                  {benOlusturanMiyim && !benimMi && (
+                    <button onClick={() => uyeCikarTikla(u.user_id, u.ad_soyad || 'Bu kişi')} disabled={islemYukleniyor} className="text-xs text-brick underline shrink-0 disabled:opacity-50">
+                      Çıkar
+                    </button>
+                  )}
+                  {/* Kurucu olmayan herkes kendisi ayrılabilir */}
+                  {benimMi && !buKisiOlusturanMi && (
+                    <button onClick={() => setOnayAyrilAcik(true)} disabled={islemYukleniyor} className="text-xs text-brick underline shrink-0 disabled:opacity-50">
+                      Ayrıl
+                    </button>
                   )}
                 </div>
               )
@@ -493,9 +554,17 @@ export default function GrupDetayPage() {
 
     <OnayModal
       acik={onayAcik}
-      baslik="Mutabakatı kaydet"
-      mesaj={mutabakatSecili ? `${mutabakatSecili.tutar.toLocaleString('tr-TR')} ₺ ödendi olarak işaretlensin mi? Bu, iki tarafın da hesabını günceller.` : ''}
-      onayMetni="Evet, Ödendi"
+      baslik={mutabakatSecili?.alacakliId === mevcutKullaniciId ? 'Ödemeyi aldığını onayla' : 'Ödemeyi onayla'}
+      mesaj={(() => {
+        if (!mutabakatSecili) return ''
+        const tutarStr = mutabakatSecili.tutar.toLocaleString('tr-TR')
+        if (mutabakatSecili.alacakliId === mevcutKullaniciId) {
+          // Alacaklı kendisi "Aldım" diyor — karşı tarafın hesabını da o an günceller, bu yüzden net uyarı gösteriyoruz
+          return `${tutarStr} ₺ aldığını onaylıyorsun. Bu, karşı tarafın hesabını da otomatik günceller — eğer parayı henüz almadıysan onaylama, karşı tarafın ödemesi eksik görünsün.`
+        }
+        return `${tutarStr} ₺ ödediğini onaylıyorsun. Bu, iki tarafın da hesabını günceller.`
+      })()}
+      onayMetni={mutabakatSecili?.alacakliId === mevcutKullaniciId ? 'Evet, Aldım' : 'Evet, Ödedim'}
       tehlikeli={false}
       onOnayla={gercekMutabakatKaydet}
       onVazgec={() => setOnayAcik(false)}
@@ -507,6 +576,35 @@ export default function GrupDetayPage() {
       mesaj={`"${grupAdi}" grubunu ve içindeki tüm harcama/mesaj geçmişini kalıcı olarak silmek istediğine emin misin? Bu işlem geri alınamaz.`}
       onOnayla={gercekGrubuSil}
       onVazgec={() => setOnaySilGrupAcik(false)}
+    />
+
+    <OnayModal
+      acik={onayCikarAcik}
+      baslik="Üyeyi çıkar"
+      mesaj={(() => {
+        if (!cikarilacakUye) return ''
+        const b = bakiyeler.find((bk) => bk.userId === cikarilacakUye.id)
+        const bakiyeUyarisi = b && Math.abs(b.net) > 0.5
+          ? ` Dikkat: bu kişinin hâlâ ${Math.abs(b.net).toLocaleString('tr-TR')} ₺ ${b.net > 0 ? 'alacağı' : 'borcu'} var — geçmiş harcamaları kalır ama grup erişimi kesilir, bakiyeyi kapatmayı unutma.`
+        : ''
+        return `${cikarilacakUye.ad}'ı gruptan çıkarmak istediğine emin misin?${bakiyeUyarisi}`
+      })()}
+      onOnayla={gercekUyeCikar}
+      onVazgec={() => { setOnayCikarAcik(false); setCikarilacakUye(null) }}
+    />
+
+    <OnayModal
+      acik={onayAyrilAcik}
+      baslik="Gruptan ayrıl"
+      mesaj={(() => {
+        const b = bakiyeler.find((bk) => bk.userId === mevcutKullaniciId)
+        const bakiyeUyarisi = b && Math.abs(b.net) > 0.5
+          ? ` Dikkat: hâlâ ${Math.abs(b.net).toLocaleString('tr-TR')} ₺ ${b.net > 0 ? 'alacağın' : 'borcun'} var — ayrılınca geçmiş harcamaların kalır ama gruba erişimin kesilir.`
+        : ''
+        return `Bu gruptan ayrılmak istediğine emin misin?${bakiyeUyarisi}`
+      })()}
+      onOnayla={gercekAyril}
+      onVazgec={() => setOnayAyrilAcik(false)}
     />
     </>
   )

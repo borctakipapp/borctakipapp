@@ -55,6 +55,11 @@ export default function GrupHarcamaDuzenleModal({
       if (bolusumError) { setMessage(hataMesajiCevir(bolusumError)); setSaving(false); return }
     }
 
+    // Bağlı kişisel gider kaydını da güncelle (güvenli RPC üzerinden)
+    await supabase.rpc('grup_harcama_gider_guncelle', {
+      p_harcama_id: harcama.id, p_tutar: tutarSayi, p_tarih: tarih, p_aciklama: `${aciklama} (Ortak Hesap)`,
+    })
+
     setSaving(false)
     setAcik(false)
     goster('Harcama güncellendi.')

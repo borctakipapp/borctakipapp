@@ -3,11 +3,14 @@
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Modal from './Modal'
+import { useToast } from './Toast'
+import { hataMesajiCevir } from '@/lib/hata-mesaji'
 
 type Mesaj = { id: string; gonderen_id: string; gonderen_ad: string | null; mesaj: string; created_at: string }
 
 export default function SohbetModal({ grupId, grupAdi }: { grupId: string; grupAdi: string }) {
   const supabase = createClient()
+  const { goster } = useToast()
   const [acik, setAcik] = useState(false)
   const [mesajlar, setMesajlar] = useState<Mesaj[]>([])
   const [yeniMesaj, setYeniMesaj] = useState('')
@@ -51,10 +54,15 @@ export default function SohbetModal({ grupId, grupAdi }: { grupId: string; grupA
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setGonderiliyor(false); return }
 
-    await supabase.from('grup_mesajlar').insert({
-      grup_id: grupId, gonderen_id: user.id, gonderen_ad: user.email, mesaj: yeniMesaj.trim(),
+    const gonderilecekMesaj = yeniMesaj.trim()
+    const { error } = await supabase.from('grup_mesajlar').insert({
+      grup_id: grupId, gonderen_id: user.id, gonderen_ad: user.email, mesaj: gonderilecekMesaj,
     })
-    setYeniMesaj('')
+    if (error) {
+      goster(hataMesajiCevir(error), 'hata')
+    } else {
+      setYeniMesaj('')
+    }
     setGonderiliyor(false)
   }
 

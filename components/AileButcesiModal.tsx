@@ -78,6 +78,17 @@ export default function AileButcesiModal() {
 
   useEffect(() => { if (acik) fetchData() }, [acik, fetchData])
 
+  // Canlı güncelleme: partnerin daveti onaylaması/reddetmesi modal açıkken anında yansısın
+  useEffect(() => {
+    if (!acik || !mevcutKullaniciId) return
+    const kanal = supabase
+      .channel(`aile-baglanti-${mevcutKullaniciId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'aile_baglantilari' }, () => fetchData())
+      .subscribe()
+
+    return () => { supabase.removeChannel(kanal) }
+  }, [acik, mevcutKullaniciId, fetchData])
+
   async function handleDavetGonder(e: React.FormEvent) {
     e.preventDefault()
     setMessage('')

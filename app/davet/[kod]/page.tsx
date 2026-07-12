@@ -33,12 +33,12 @@ export default async function DavetPage({
 
   const { data: mevcutUyelik } = await supabase
     .from('grup_uyeler')
-    .select('id')
+    .select('id, aktif')
     .eq('grup_id', grup.id)
     .eq('user_id', user.id)
     .maybeSingle()
 
-  if (mevcutUyelik) {
+  if (mevcutUyelik?.aktif) {
     redirect(`/dashboard/gruplar/${grup.id}`)
   }
 
@@ -48,14 +48,26 @@ export default async function DavetPage({
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) redirect('/login')
 
+    // Daha önce gruptan ayrılmış/çıkarılmışsa (pasif kaydı varsa) yeniden aktif ediyoruz,
+    // hiç üye olmamışsa yeni kayıt oluşturuyoruz.
+    const { data: eskiKayit } = await supabase.from('grup_uyeler').select('id').eq('grup_id', grup!.id).eq('user_id', user.id).maybeSingle()
+    if (eskiKayit) {
+      await supabase.from('grup_uyeler').update({ aktif: true }).eq('id', eskiKayit.id)
+      redirect(`/dashboard/gruplar/${grup!.id}`)
+    }
     const { data: profil } = await supabase.from('profiles').select('full_name').eq('id', user.id).single()
     const gorunenAd = profil?.full_name?.trim() || user.email
 
-    await supabase.from('grup_uyeler').insert({
+    const { error } = await supabase.from('grup_uyeler').insert({
       grup_id: grup!.id,
       user_id: user.id,
       ad_soyad: gorunenAd,
     })
+
+    if (error) {
+      // Zaten üye olabilir ya da geçici bir sorun olabilir — güvenli tarafta kalıp gruplar listesine yönlendiriyoruz
+      redirect('/dashboard/gruplar')
+    }
 
     redirect(`/dashboard/gruplar/${grup!.id}`)
   }

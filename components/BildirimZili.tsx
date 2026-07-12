@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Monogram from '@/components/Monogram'
 import BorcDetayModal from '@/components/BorcDetayModal'
@@ -39,55 +39,73 @@ export default function BildirimZili() {
   const [acik, setAcik] = useState(false)
   const [yukleniyor, setYukleniyor] = useState(true)
   const [bildirimler, setBildirimler] = useState<Bildirim[]>([])
+  const [kullaniciId, setKullaniciId] = useState('')
   const kutuRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    async function fetchBildirimler() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { setYukleniyor(false); return }
+  const fetchBildirimler = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { setYukleniyor(false); return }
+    setKullaniciId(user.id)
 
-      const bugun = new Date()
-      bugun.setHours(0, 0, 0, 0)
+    const bugun = new Date()
+    bugun.setHours(0, 0, 0, 0)
 
-      // Borçlar
-      const { data: debts } = await supabase
-        .from('debts')
-        .select('id, institution_name, remaining_amount, due_date')
-        .eq('user_id', user.id)
-        .eq('status', 'active')
-        .not('due_date', 'is', null)
+    // Borçlar
+    const { data: debts } = await supabase
+      .from('debts')
+      .select('id, institution_name, remaining_amount, due_date')
+      .eq('user_id', user.id)
+      .eq('status', 'active')
+      .not('due_date', 'is', null)
 
-      const borcListesi: Bildirim[] = (debts || [])
-        .map((d) => {
-          const [y, m, gun] = d.due_date.split('-').map(Number)
-          const tarih = new Date(y, m - 1, gun)
-          const gunKaldi = Math.round((tarih.getTime() - bugun.getTime()) / 86400000)
-          return { tur: 'borc' as const, id: d.id, baslik: d.institution_name, altBaslik: '', tutar: Number(d.remaining_amount), gunKaldi }
-        })
-        .filter((d) => d.gunKaldi <= 5)
+    const borcListesi: Bildirim[] = (debts || [])
+      .map((d) => {
+        const [y, m, gun] = d.due_date.split('-').map(Number)
+        const tarih = new Date(y, m - 1, gun)
+        const gunKaldi = Math.round((tarih.getTime() - bugun.getTime()) / 86400000)
+        return { tur: 'borc' as const, id: d.id, baslik: d.institution_name, altBaslik: '', tutar: Number(d.remaining_amount), gunKaldi }
+      })
+      .filter((d) => d.gunKaldi <= 5)
 
-      // Düzenli işlemler (faturalar/giderler) — yaklaşan tekrar tarihini kendimiz hesaplıyoruz
-      const { data: duzenliler } = await supabase
-        .from('recurring_items')
-        .select('id, category, description, amount, day_of_month')
-        .eq('user_id', user.id)
-        .eq('type', 'expense')
-        .eq('active', true)
+    // Düzenli işlemler (faturalar/giderler) — yaklaşan tekrar tarihini kendimiz hesaplıyoruz
+    const { data: duzenliler } = await supabase
+      .from('recurring_items')
+      .select('id, category, description, amount, day_of_month')
+      .eq('user_id', user.id)
+      .eq('type', 'expense')
+      .eq('active', true)
 
-      const duzenliListesi: Bildirim[] = (duzenliler || [])
-        .map((r) => {
-          const tarih = sonrakiTarihHesapla(r.day_of_month)
-          const gunKaldi = Math.round((tarih.getTime() - bugun.getTime()) / 86400000)
-          return { tur: 'duzenli' as const, id: r.id, baslik: r.category, altBaslik: r.description || '', tutar: Number(r.amount), gunKaldi }
-        })
-        .filter((d) => d.gunKaldi <= 5)
+    const duzenliListesi: Bildirim[] = (duzenliler || [])
+      .map((r) => {
+        const tarih = sonrakiTarihHesapla(r.day_of_month)
+        const gunKaldi = Math.round((tarih.getTime() - bugun.getTime()) / 86400000)
+        return { tur: 'duzenli' as const, id: r.id, baslik: r.category, altBaslik: r.description || '', tutar: Number(r.amount), gunKaldi }
+      })
+      .filter((d) => d.gunKaldi <= 5)
 
-      const hepsi = [...borcListesi, ...duzenliListesi].sort((a, b) => a.gunKaldi - b.gunKaldi)
-      setBildirimler(hepsi)
-      setYukleniyor(false)
-    }
-    fetchBildirimler()
+    const hepsi = [...borcListesi, ...duzenliListesi].sort((a, b) => a.gunKaldi - b.gunKaldi)
+    setBildirimler(hepsi)
+    setYukleniyor(false)
   }, [])
+
+  useEffect(() => { fetchBildirimler() }, [fetchBildirimler])
+
+  // Periyodik yenileme (2 dakikada bir — gün değişimi/gecikme durumunu da günceller) + Realtime
+  useEffect(() => {
+    const zamanlayici = setInterval(fetchBildirimler, 2 * 60 * 1000)
+    return () => clearInterval(zamanlayici)
+  }, [fetchBildirimler])
+
+  useEffect(() => {
+    if (!kullaniciId) return
+    const kanal = supabase
+      .channel(`bildirimler-${kullaniciId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'debts', filter: `user_id=eq.${kullaniciId}` }, () => fetchBildirimler())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'recurring_items', filter: `user_id=eq.${kullaniciId}` }, () => fetchBildirimler())
+      .subscribe()
+
+    return () => { supabase.removeChannel(kanal) }
+  }, [kullaniciId, fetchBildirimler])
 
   useEffect(() => {
     function disaTikla(e: MouseEvent) {

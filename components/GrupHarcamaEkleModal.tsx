@@ -78,6 +78,13 @@ export default function GrupHarcamaEkleModal({ grupId, onBasarili }: { grupId: s
 
     if (bolusumError) { setMessage(hataMesajiCevir(bolusumError)); setLoading(false); return }
 
+    // Ödeyen kişinin kişisel Gelir-Gider'ine otomatik gider ekleniyor (güvenli RPC üzerinden —
+    // ödeyen sen olmasan bile doğru kişiye yazılabilsin diye)
+    await supabase.rpc('grup_harcama_gider_ekle', {
+      p_harcama_id: harcama.id, p_odeyen_id: odeyenId, p_tutar: tutarSayi, p_tarih: tarih,
+      p_aciklama: `${aciklama} (Ortak Hesap)`, p_grup_id: grupId,
+    })
+
     setLoading(false)
     sifirlaVeKapat()
     goster('Harcama eklendi.')
