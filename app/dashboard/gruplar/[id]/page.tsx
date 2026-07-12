@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import Monogram from '@/components/Monogram'
 import OnayModal from '@/components/OnayModal'
 import Modal from '@/components/Modal'
+import HesapDefteriModal from '@/components/HesapDefteriModal'
 import PastaGrafik from '@/components/PastaGrafik'
 import SohbetModal from '@/components/SohbetModal'
 import GrupHarcamaEkleModal from '@/components/GrupHarcamaEkleModal'
@@ -273,7 +274,16 @@ export default function GrupDetayPage() {
             </div>
           )}
 
-          <h2 className="text-sm font-medium text-muted mb-3">Kim Kime Ne Kadar Borçlu</h2>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-medium text-muted">Kim Kime Ne Kadar Borçlu</h2>
+            <HesapDefteriModal
+              uyeler={uyeler}
+              harcamalar={harcamalar}
+              bolusumler={bolusumler}
+              odemeler={odemeler}
+              tetikleyici={<span className="text-xs text-navy underline cursor-pointer">📒 Hesap Defteri</span>}
+            />
+          </div>
           {oneriler.length === 0 ? (
             <p className="text-muted text-sm bg-white rounded-lg p-4 border border-border">Herkesin hesabı kapalı — kimse kimseye borçlu değil. 🎉</p>
           ) : (
