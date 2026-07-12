@@ -36,11 +36,14 @@ function ornekSablonIndir() {
   const a = document.createElement('a')
   a.href = url
   a.download = 'ornek-sablon.csv'
+  a.style.display = 'none'
+  document.body.appendChild(a)
   a.click()
-  URL.revokeObjectURL(url)
+  document.body.removeChild(a)
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
-export default function CSVIceAktarModal() {
+export default function CSVIceAktarModal({ onBasarili }: { onBasarili?: () => void } = {}) {
   const router = useRouter()
   const supabase = createClient()
   const [acik, setAcik] = useState(false)
@@ -114,7 +117,7 @@ export default function CSVIceAktarModal() {
       setMessage('Hata: ' + error.message)
     } else {
       sifirlaVeKapat()
-      router.refresh()
+      (onBasarili ? onBasarili() : router.refresh())
     }
   }
 

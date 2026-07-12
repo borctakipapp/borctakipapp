@@ -1,7 +1,6 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import AppSayfaDuzeni from '@/components/AppSayfaDuzeni'
 import Monogram from '@/components/Monogram'
 import GrupOlusturModal from '@/components/GrupOlusturModal'
 
@@ -18,8 +17,7 @@ export default async function GruplarPage() {
   const gruplar = (uyelikler || []).map((u: any) => u.gruplar).filter(Boolean)
 
   return (
-    <AppSayfaDuzeni aktif="gruplar">
-      <main className="max-w-2xl mx-auto px-6 py-10 pb-24 md:pb-10">
+          <main className="max-w-2xl mx-auto px-6 py-10 pb-24 md:pb-10">
         <p className="text-sm text-muted mb-1">Ortak Hesap</p>
         <p className="text-2xl font-medium text-navy mb-6">Gruplarım</p>
 
@@ -49,6 +47,6 @@ export default async function GruplarPage() {
           </div>
         )}
       </main>
-    </AppSayfaDuzeni>
+    
   )
 }

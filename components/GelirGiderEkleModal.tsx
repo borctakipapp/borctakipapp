@@ -15,7 +15,7 @@ function bugun() {
 }
 function ikiBasamak(n: number) { return String(n).padStart(2, '0') }
 
-export default function GelirGiderEkleModal({ hedefAy, hedefYil }: { hedefAy: number; hedefYil: number }) {
+export default function GelirGiderEkleModal({ hedefAy, hedefYil, onBasarili }: { hedefAy: number; hedefYil: number; onBasarili?: () => void }) {
   const router = useRouter()
   const supabase = createClient()
   const [acik, setAcik] = useState(false)
@@ -109,7 +109,7 @@ export default function GelirGiderEkleModal({ hedefAy, hedefYil }: { hedefAy: nu
     } else {
       setLoading(false)
       sifirlaVeKapat()
-      router.refresh()
+      onBasarili ? onBasarili() : router.refresh()
     }
   }
 

@@ -1,9 +1,8 @@
 import { redirect } from 'next/navigation'
-import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import AppSayfaDuzeni from '@/components/AppSayfaDuzeni'
 import Monogram from '@/components/Monogram'
 import BorcEkleModal from '@/components/BorcEkleModal'
+import BorcDetayModal from '@/components/BorcDetayModal'
 
 const KATEGORI_ETIKET: Record<string, string> = {
   kredi_karti: 'Kredi Kartı',
@@ -51,8 +50,7 @@ export default async function BorclarPage() {
   const toplamBorc = (debts || []).reduce((sum, d) => sum + Number(d.remaining_amount), 0)
 
   return (
-    <AppSayfaDuzeni aktif="borclar">
-<main className="max-w-2xl mx-auto px-6 py-10 pb-24 md:pb-10">
+    <main className="max-w-2xl mx-auto px-6 py-10 pb-24 md:pb-10">
         <p className="text-sm text-muted mb-1">Toplam Borcun</p>
         <p className="font-mono text-5xl font-medium text-navy tracking-tight mb-2">
           {toplamBorc.toLocaleString('tr-TR')} ₺
@@ -77,32 +75,34 @@ export default async function BorclarPage() {
           {debts?.map((debt) => {
             const durum = durumBilgisi(debt.due_date)
             return (
-              <Link
+              <BorcDetayModal
                 key={debt.id}
-                href={`/dashboard/borc/${debt.id}`}
-                className={`bg-white rounded-lg pl-4 pr-4 py-3 flex items-center gap-3 border-l-4 ${durum.renk} hover:shadow-sm transition-shadow`}
-              >
-                <Monogram isim={debt.institution_name} boyut={38} />
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-navy text-sm truncate">
-                    <span className="mr-1">{KATEGORI_IKON[debt.category] || '📄'}</span>
-                    {debt.institution_name}
-                  </p>
-                  <p className="text-xs text-muted mt-0.5">
-                    {KATEGORI_ETIKET[debt.category] || debt.category}
-                    {durum.etiket && (
-                      <span className={`ml-2 ${durum.renkYazi}`}>· {durum.etiket}</span>
-                    )}
-                  </p>
-                </div>
-                <span className="font-mono text-navy text-sm shrink-0">
-                  {Number(debt.remaining_amount).toLocaleString('tr-TR')} ₺
-                </span>
-              </Link>
+                debtId={debt.id}
+                tetikleyici={
+                  <div className={`bg-white rounded-lg pl-4 pr-4 py-3 flex items-center gap-3 border-l-4 ${durum.renk} hover:shadow-sm transition-shadow cursor-pointer`}>
+                    <Monogram isim={debt.institution_name} boyut={38} />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-navy text-sm truncate">
+                        <span className="mr-1">{KATEGORI_IKON[debt.category] || '📄'}</span>
+                        {debt.institution_name}
+                      </p>
+                      <p className="text-xs text-muted mt-0.5">
+                        {KATEGORI_ETIKET[debt.category] || debt.category}
+                        {durum.etiket && (
+                          <span className={`ml-2 ${durum.renkYazi}`}>· {durum.etiket}</span>
+                        )}
+                      </p>
+                    </div>
+                    <span className="font-mono text-navy text-sm shrink-0">
+                      {Number(debt.remaining_amount).toLocaleString('tr-TR')} ₺
+                    </span>
+                  </div>
+                }
+              />
             )
           })}
         </div>
       </main>
-    </AppSayfaDuzeni>
+    
   )
 }

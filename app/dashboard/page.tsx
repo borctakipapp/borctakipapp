@@ -1,8 +1,9 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import AppSayfaDuzeni from '@/components/AppSayfaDuzeni'
 import MaasOnboardingBanner from '@/components/MaasOnboardingBanner'
+import BirikimHedefModal from '@/components/BirikimHedefModal'
+import BorcDetayModal from '@/components/BorcDetayModal'
 
 const KATEGORI_RENK: Record<string, string> = {
   'Market/Gıda': '#B5533C', 'Ulaşım': '#D98E3F', 'Eğlence': '#7f8ba0', 'Sağlık': '#1B2A4A',
@@ -273,8 +274,7 @@ export default async function OzetPage() {
   const enBuyukGider = Math.max(...giderListesi.map((g) => g.tutar), 1)
 
   return (
-    <AppSayfaDuzeni aktif="ozet">
-<main className="max-w-2xl mx-auto px-6 py-10 pb-24 md:pb-10">
+    <main className="max-w-2xl mx-auto px-6 py-10 pb-24 md:pb-10">
         <p className="text-lg text-navy mb-6">Merhaba{ilkIsim ? `, ${ilkIsim}` : ''} 👋</p>
 
         <MaasOnboardingBanner />
@@ -322,15 +322,17 @@ export default async function OzetPage() {
 
         {/* Borç Önceliklendirme */}
         {enYuksekFaizliBorc && (
-          <Link
-            href={`/dashboard/borc/${enYuksekFaizliBorc.id}`}
-            className="block bg-white rounded-lg border border-border p-5 mb-8 hover:shadow-sm transition-shadow"
-          >
-            <h2 className="text-xs font-medium text-muted uppercase tracking-wide mb-2">Öncelik Önerisi</h2>
-            <p className="text-sm text-navy">
-              Önce <b>{enYuksekFaizliBorc.institution_name}</b> borcuna odaklan — faiz oranı (%{Number(enYuksekFaizliBorc.interest_rate).toLocaleString('tr-TR')}) diğerlerinden yüksek, erken kapatman en çok burada tasarruf sağlar.
-            </p>
-          </Link>
+          <BorcDetayModal
+            debtId={enYuksekFaizliBorc.id}
+            tetikleyici={
+              <div className="block bg-white rounded-lg border border-border p-5 mb-8 hover:shadow-sm transition-shadow cursor-pointer">
+                <h2 className="text-xs font-medium text-muted uppercase tracking-wide mb-2">Öncelik Önerisi</h2>
+                <p className="text-sm text-navy">
+                  Önce <b>{enYuksekFaizliBorc.institution_name}</b> borcuna odaklan — faiz oranı (%{Number(enYuksekFaizliBorc.interest_rate).toLocaleString('tr-TR')}) diğerlerinden yüksek, erken kapatman en çok burada tasarruf sağlar.
+                </p>
+              </div>
+            }
+          />
         )}
 
         {/* "Bugün" — bağlamsal, konuşma diliyle özet */}
@@ -338,14 +340,19 @@ export default async function OzetPage() {
           <h2 className="text-xs font-medium text-muted uppercase tracking-wide">Bugün</h2>
 
           {enYakinOdeme && (
-            <Link href={`/dashboard/borc/${enYakinOdeme.id}`} className="flex items-start gap-2.5 hover:opacity-80 transition-opacity">
-              <span className="text-lg leading-none">💳</span>
-              <p className="text-sm text-navy">
-                {enYakinOdeme.gunKaldi < 0 && <><b>{enYakinOdeme.institution_name}</b> ödemesi {Math.abs(enYakinOdeme.gunKaldi)} gün gecikti.</>}
-                {enYakinOdeme.gunKaldi === 0 && <><b>{enYakinOdeme.institution_name}</b> için bugün son gün.</>}
-                {enYakinOdeme.gunKaldi > 0 && <>{enYakinOdeme.gunKaldi} gün sonra <b>{enYakinOdeme.institution_name}</b> ödemen var — {Number(enYakinOdeme.remaining_amount).toLocaleString('tr-TR')} ₺</>}
-              </p>
-            </Link>
+            <BorcDetayModal
+              debtId={enYakinOdeme.id}
+              tetikleyici={
+                <div className="flex items-start gap-2.5 hover:opacity-80 transition-opacity cursor-pointer">
+                  <span className="text-lg leading-none">💳</span>
+                  <p className="text-sm text-navy">
+                    {enYakinOdeme.gunKaldi < 0 && <><b>{enYakinOdeme.institution_name}</b> ödemesi {Math.abs(enYakinOdeme.gunKaldi)} gün gecikti.</>}
+                    {enYakinOdeme.gunKaldi === 0 && <><b>{enYakinOdeme.institution_name}</b> için bugün son gün.</>}
+                    {enYakinOdeme.gunKaldi > 0 && <>{enYakinOdeme.gunKaldi} gün sonra <b>{enYakinOdeme.institution_name}</b> ödemen var — {Number(enYakinOdeme.remaining_amount).toLocaleString('tr-TR')} ₺</>}
+                  </p>
+                </div>
+              }
+            />
           )}
 
           <Link href="/dashboard/gelir-gider" className="flex items-start gap-2.5 hover:opacity-80 transition-opacity">
@@ -389,12 +396,17 @@ export default async function OzetPage() {
           )}
 
           {aktifHedef && (
-            <Link href={`/dashboard/birikim/${aktifHedef.id}`} className="flex items-start gap-2.5 hover:opacity-80 transition-opacity">
-              <span className="text-lg leading-none">🎯</span>
-              <p className="text-sm text-navy">
-                <b>{aktifHedef.goal_name}</b> hedefinde %{aktifHedefOrani.toFixed(0)} yoldasın
-              </p>
-            </Link>
+            <BirikimHedefModal
+              goalId={aktifHedef.id}
+              tetikleyici={
+                <div className="flex items-start gap-2.5 hover:opacity-80 transition-opacity cursor-pointer">
+                  <span className="text-lg leading-none">🎯</span>
+                  <p className="text-sm text-navy">
+                    <b>{aktifHedef.goal_name}</b> hedefinde %{aktifHedefOrani.toFixed(0)} yoldasın
+                  </p>
+                </div>
+              }
+            />
           )}
 
           {!enYakinOdeme && !aktifHedef && (
@@ -441,13 +453,19 @@ export default async function OzetPage() {
               const renk = y.gunKaldi <= 0 ? 'border-brick' : y.gunKaldi <= 5 ? 'border-amber' : 'border-sage'
               const etiket = y.gunKaldi < 0 ? `${Math.abs(y.gunKaldi)} gün gecikti` : y.gunKaldi === 0 ? 'Bugün son gün' : `${y.gunKaldi} gün kaldı`
               return (
-                <Link key={y.id} href={`/dashboard/borc/${y.id}`} className={`bg-white rounded-lg pl-4 pr-4 py-3 flex items-center justify-between border-l-4 ${renk} hover:shadow-sm transition-shadow`}>
-                  <div>
-                    <p className="font-medium text-navy text-sm">{y.institution_name}</p>
-                    <p className="text-xs text-muted mt-0.5">{etiket}</p>
-                  </div>
-                  <span className="font-mono text-navy text-sm">{Number(y.remaining_amount).toLocaleString('tr-TR')} ₺</span>
-                </Link>
+                <BorcDetayModal
+                  key={y.id}
+                  debtId={y.id}
+                  tetikleyici={
+                    <div className={`bg-white rounded-lg pl-4 pr-4 py-3 flex items-center justify-between border-l-4 ${renk} hover:shadow-sm transition-shadow cursor-pointer`}>
+                      <div>
+                        <p className="font-medium text-navy text-sm">{y.institution_name}</p>
+                        <p className="text-xs text-muted mt-0.5">{etiket}</p>
+                      </div>
+                      <span className="font-mono text-navy text-sm">{Number(y.remaining_amount).toLocaleString('tr-TR')} ₺</span>
+                    </div>
+                  }
+                />
               )
             })}
           </div>
@@ -470,6 +488,6 @@ export default async function OzetPage() {
           </details>
         )}
       </main>
-    </AppSayfaDuzeni>
+    
   )
 }

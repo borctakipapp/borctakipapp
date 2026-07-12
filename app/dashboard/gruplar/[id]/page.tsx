@@ -140,14 +140,10 @@ export default function GrupDetayPage() {
     .sort((a, b) => b.tutar - a.tutar)
 
   return (
-    <div className="min-h-screen bg-paper">
-      <header className="bg-navy px-6 py-4 flex items-center">
-        <button onClick={() => router.push('/dashboard/gruplar')} className="text-paper/70 hover:text-paper text-sm">
-          ← Gruplara dön
-        </button>
-      </header>
-
-      <main className="max-w-md mx-auto px-6 py-10">
+    <main className="max-w-md mx-auto px-6 py-10 pb-24 md:pb-10">
+      <Link href="/dashboard/gruplar" className="text-xs text-muted hover:text-navy mb-4 inline-block">
+        ← Gruplara dön
+      </Link>
         <div className="flex items-center gap-3 mb-1">
           <Monogram isim={grupAdi} boyut={44} />
           <h1 className="text-xl font-medium text-navy">{grupAdi}</h1>
@@ -310,6 +306,6 @@ export default function GrupDetayPage() {
         onOnayla={gercekMutabakatKaydet}
         onVazgec={() => setOnayAcik(false)}
       />
-    </div>
+    </main>
   )
 }

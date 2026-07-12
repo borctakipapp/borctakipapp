@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import Monogram from '@/components/Monogram'
+import BorcDetayModal from '@/components/BorcDetayModal'
 
 type YaklasanBorc = {
   id: string
@@ -98,21 +99,23 @@ export default function BildirimZili() {
               {yaklasanlar.map((y) => {
                 const etiket = gunEtiketi(y.gunKaldi)
                 return (
-                  <Link
-                    key={y.id}
-                    href={`/dashboard/borc/${y.id}`}
-                    onClick={() => setAcik(false)}
-                    className="flex items-center gap-2.5 px-4 py-2.5 hover:bg-paper transition-colors border-b border-border last:border-0"
-                  >
-                    <Monogram isim={y.institution_name} boyut={28} />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-navy font-medium truncate">{y.institution_name}</p>
-                      <p className={`text-[11px] ${etiket.renk}`}>{etiket.metin}</p>
-                    </div>
-                    <span className="font-mono text-xs text-navy shrink-0">
-                      {Number(y.remaining_amount).toLocaleString('tr-TR')} ₺
-                    </span>
-                  </Link>
+                  <div key={y.id} onClick={() => setAcik(false)} className="border-b border-border last:border-0">
+                    <BorcDetayModal
+                      debtId={y.id}
+                      tetikleyici={
+                        <div className="flex items-center gap-2.5 px-4 py-2.5 hover:bg-paper transition-colors cursor-pointer">
+                          <Monogram isim={y.institution_name} boyut={28} />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-navy font-medium truncate">{y.institution_name}</p>
+                            <p className={`text-[11px] ${etiket.renk}`}>{etiket.metin}</p>
+                          </div>
+                          <span className="font-mono text-xs text-navy shrink-0">
+                            {Number(y.remaining_amount).toLocaleString('tr-TR')} ₺
+                          </span>
+                        </div>
+                      }
+                    />
+                  </div>
                 )
               })}
             </div>

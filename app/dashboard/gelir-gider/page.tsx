@@ -4,10 +4,12 @@ import { useState, useEffect, useCallback, Suspense } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import AppSayfaDuzeni from '@/components/AppSayfaDuzeni'
 import OnayModal from '@/components/OnayModal'
 import GelirGiderEkleModal from '@/components/GelirGiderEkleModal'
 import CSVIceAktarModal from '@/components/CSVIceAktarModal'
+import GelirGiderDuzenleModal from '@/components/GelirGiderDuzenleModal'
+import DuzenliIslemlerModal from '@/components/DuzenliIslemlerModal'
+import BorcDetayModal from '@/components/BorcDetayModal'
 import Secim from '@/components/Secim'
 
 const AY_ISIMLERI = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık']
@@ -73,6 +75,7 @@ function GelirGiderPageIc() {
 
   const searchParams = useSearchParams()
   const [loading, setLoading] = useState(true)
+  const [ilkYuklemeTamam, setIlkYuklemeTamam] = useState(false)
   const [ay, setAy] = useState(() => {
     const p = searchParams.get('ay')
     return p !== null ? parseInt(p) : new Date().getMonth()
@@ -368,6 +371,7 @@ function GelirGiderPageIc() {
     setHedefler(hedefVerisi || [])
 
     setLoading(false)
+    setIlkYuklemeTamam(true)
   }, [ay, yil])
 
   useEffect(() => { fetchData() }, [fetchData])
@@ -539,13 +543,12 @@ function GelirGiderPageIc() {
   }
   const enBuyukGider = Math.max(...giderKategorileri.map((g) => g.tutar), 1)
 
-  if (loading) {
+  if (loading && !ilkYuklemeTamam) {
     return <div className="min-h-screen bg-paper flex items-center justify-center text-muted text-sm">Yükleniyor...</div>
   }
 
   return (
-    <AppSayfaDuzeni aktif="gelir-gider">
-<main className="max-w-2xl mx-auto px-6 py-10 pb-24 md:pb-10">
+    <main className={`max-w-2xl mx-auto px-6 py-10 pb-24 md:pb-10 transition-opacity ${loading ? 'opacity-50 pointer-events-none' : ''}`}>
 
         <div className="flex items-center justify-between mb-3">
           <button onClick={() => setYil(yil - 1)} className="text-navy text-sm px-3 py-1.5 rounded-md hover:bg-white transition-colors">← {yil - 1}</button>
@@ -682,14 +685,9 @@ function GelirGiderPageIc() {
         </div>
 
         <div className="flex flex-wrap gap-2 mb-8">
-          <GelirGiderEkleModal hedefAy={ay} hedefYil={yil} />
-          <Link
-            href="/dashboard/gelir-gider/duzenli"
-            className="bg-white border border-border text-navy text-sm font-medium rounded-lg px-4 py-2.5 hover:bg-paper transition-colors"
-          >
-            ↻ Düzenli İşlemler
-          </Link>
-          <CSVIceAktarModal />
+          <GelirGiderEkleModal hedefAy={ay} hedefYil={yil} onBasarili={fetchData} />
+          <DuzenliIslemlerModal onBasarili={fetchData} />
+          <CSVIceAktarModal onBasarili={fetchData} />
         </div>
 
         {giderKategorileri.length > 0 && (
@@ -764,13 +762,7 @@ function GelirGiderPageIc() {
                 <span className={`font-mono text-sm shrink-0 ${t.type === 'income' ? 'text-sage' : 'text-brick'}`}>
                   {t.type === 'income' ? '+' : '−'}{Number(t.amount).toLocaleString('tr-TR')} ₺
                 </span>
-                <Link
-                  href={`/dashboard/gelir-gider/${t.id}?ay=${ay}&yil=${yil}`}
-                  className="shrink-0 text-muted hover:text-navy p-1"
-                  aria-label="Düzenle"
-                >
-                  ✎
-                </Link>
+                <GelirGiderDuzenleModal txId={t.id} onBasarili={fetchData} />
               </div>
             ))}
 
@@ -789,9 +781,7 @@ function GelirGiderPageIc() {
                 <span className="font-mono text-sm shrink-0 text-sage">
                   −{g.tutar.toLocaleString('tr-TR', { maximumFractionDigits: 0 })} ₺
                 </span>
-                <Link href={`/dashboard/borc/${g.debtId}`} className="shrink-0 text-muted hover:text-navy p-1" aria-label="Borca git">
-                  ✎
-                </Link>
+                <BorcDetayModal debtId={g.debtId} onBasarili={fetchData} tetikleyici={<span className="shrink-0 text-muted hover:text-navy p-1 cursor-pointer" aria-label="Borca git">✎</span>} />
               </div>
             ))}
 
@@ -818,13 +808,7 @@ function GelirGiderPageIc() {
                 <span className={`font-mono text-sm shrink-0 ${p.odendi ? 'text-sage' : p.gelecek ? 'text-muted' : 'text-brick'}`}>
                   −{p.tutar.toLocaleString('tr-TR', { maximumFractionDigits: 0 })} ₺
                 </span>
-                <Link
-                  href={`/dashboard/borc/${p.debtId}`}
-                  className="shrink-0 text-muted hover:text-navy p-1"
-                  aria-label="Borca git"
-                >
-                  ✎
-                </Link>
+                <BorcDetayModal debtId={p.debtId} onBasarili={fetchData} tetikleyici={<span className="shrink-0 text-muted hover:text-navy p-1 cursor-pointer" aria-label="Borca git">✎</span>} />
               </div>
             ))}
 
@@ -866,7 +850,7 @@ function GelirGiderPageIc() {
         onOnayla={gercekTxSil}
         onVazgec={() => setOnayAcik(false)}
       />
-    </AppSayfaDuzeni>
+    
   )
 }
 
