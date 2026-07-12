@@ -18,19 +18,23 @@ export default function OnayModal({
 }: OnayModalProps) {
   const vazgecRef = useRef<HTMLButtonElement>(null)
 
+  // Aynı odak-çalma sorununu önlemek için onVazgec'i ref'e sarmalıyoruz (bkz. Modal.tsx notu)
+  const onVazgecRef = useRef(onVazgec)
+  useEffect(() => { onVazgecRef.current = onVazgec })
+
   useEffect(() => {
     if (!acik) return
     function tusaBasildi(e: KeyboardEvent) {
-      if (e.key === 'Escape') onVazgec()
+      if (e.key === 'Escape') onVazgecRef.current()
     }
     document.addEventListener('keydown', tusaBasildi)
-    // Odak varsayılan olarak "Vazgeç"e gitsin — yanlışlıkla Enter'a basan biri geri dönsün, silmesin.
     const zamanlayici = setTimeout(() => vazgecRef.current?.focus(), 50)
     return () => {
       document.removeEventListener('keydown', tusaBasildi)
       clearTimeout(zamanlayici)
     }
-  }, [acik, onVazgec])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [acik])
 
   if (!acik) return null
 

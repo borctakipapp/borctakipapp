@@ -12,12 +12,20 @@ export default function Modal({
 }) {
   const icerikRef = useRef<HTMLDivElement>(null)
 
-  // ESC ile kapatma + arka plan kaydırmayı durdurma + odağı modal'a taşıma
+  // onKapat her render'da yeni bir referans olabilir (ebeveyn genelde inline fonksiyon veriyor).
+  // Bunu doğrudan aşağıdaki effect'in bağımlılığına koyarsak, kullanıcı bir input'a her karakter
+  // yazdığında (state güncellenip ebeveyn yeniden render olduğunda) effect gereksiz yere tekrar
+  // çalışır ve odağı input'tan çalıp modale geri verir — bu da "her ikinci karakter kayboluyor"
+  // hatasına yol açar. Ref ile sarmalayıp asıl focus/ESC effect'ini SADECE "acik" değiştiğinde
+  // çalıştırıyoruz.
+  const onKapatRef = useRef(onKapat)
+  useEffect(() => { onKapatRef.current = onKapat })
+
   useEffect(() => {
     if (!acik) return
 
     function tusaBasildi(e: KeyboardEvent) {
-      if (e.key === 'Escape') onKapat()
+      if (e.key === 'Escape') onKapatRef.current()
     }
     document.addEventListener('keydown', tusaBasildi)
 
@@ -31,7 +39,9 @@ export default function Modal({
       document.body.style.overflow = eskiOverflow
       clearTimeout(zamanlayici)
     }
-  }, [acik, onKapat])
+    // Bilerek sadece "acik" — modal açılınca/kapanınca bir kez çalışsın, her render'da değil.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [acik])
 
   if (!acik) return null
 
