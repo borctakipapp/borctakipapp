@@ -5,6 +5,7 @@ import MaasOnboardingBanner from '@/components/MaasOnboardingBanner'
 import BirikimHedefModal from '@/components/BirikimHedefModal'
 import BorcDetayModal from '@/components/BorcDetayModal'
 import CubukGrafik from '@/components/CubukGrafik'
+import AileButcesiModal from '@/components/AileButcesiModal'
 
 const KATEGORI_RENK: Record<string, string> = {
   'Market/Gıda': '#B5533C', 'Ulaşım': '#D98E3F', 'Eğlence': '#7f8ba0', 'Sağlık': '#1B2A4A',
@@ -443,6 +444,10 @@ export default async function OzetPage() {
             </div>
           </>
         )}
+
+        <div className="mb-8">
+          <AileButcesiModal />
+        </div>
 
         {/* Rozetler */}
         <h2 className="text-sm font-medium text-muted mb-3">Başarılarım</h2>
