@@ -48,10 +48,13 @@ export default async function DavetPage({
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) redirect('/login')
 
+    const { data: profil } = await supabase.from('profiles').select('full_name').eq('id', user.id).single()
+    const gorunenAd = profil?.full_name?.trim() || user.email
+
     await supabase.from('grup_uyeler').insert({
       grup_id: grup!.id,
       user_id: user.id,
-      ad_soyad: user.email,
+      ad_soyad: gorunenAd,
     })
 
     redirect(`/dashboard/gruplar/${grup!.id}`)

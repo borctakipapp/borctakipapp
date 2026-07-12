@@ -38,7 +38,10 @@ export default function GrupOlusturModal() {
       return
     }
 
-    const { error: uyeError } = await supabase.from('grup_uyeler').insert({ grup_id: grup.id, user_id: user.id, ad_soyad: user.email })
+    const { data: profil } = await supabase.from('profiles').select('full_name').eq('id', user.id).single()
+    const gorunenAd = profil?.full_name?.trim() || user.email
+
+    const { error: uyeError } = await supabase.from('grup_uyeler').insert({ grup_id: grup.id, user_id: user.id, ad_soyad: gorunenAd })
 
     if (uyeError) {
       setMessage(hataMesajiCevir(uyeError))
