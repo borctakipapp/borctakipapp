@@ -6,10 +6,21 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import Monogram from '@/components/Monogram'
 import OnayModal from '@/components/OnayModal'
+import PastaGrafik from '@/components/PastaGrafik'
+import SohbetModal from '@/components/SohbetModal'
+import GrupHarcamaEkleModal from '@/components/GrupHarcamaEkleModal'
 import { bakiyeHesapla, mutabakatOner } from '@/lib/grup-hesap'
+import { ibanFormatla, ibanTemizle, ibanGecerliMi } from '@/lib/iban'
 
 type Uye = { user_id: string; ad_soyad: string | null; iban: string | null }
 type Harcama = { id: string; odeyen_id: string; aciklama: string; tutar: number; tarih: string }
+
+const MONOGRAM_RENKLERI = ['#B5533C', '#4A7C74', '#D98E3F', '#5B7FA6', '#8B6BA8', '#6B8E4E', '#C77B8E', '#4A6670']
+function kisiRengi(isim: string) {
+  let hash = 0
+  for (let i = 0; i < isim.length; i++) hash = isim.charCodeAt(i) + ((hash << 5) - hash)
+  return MONOGRAM_RENKLERI[Math.abs(hash) % MONOGRAM_RENKLERI.length]
+}
 
 export default function GrupDetayPage() {
   const router = useRouter()
@@ -25,13 +36,16 @@ export default function GrupDetayPage() {
   const [bolusumler, setBolusumler] = useState<{ user_id: string; pay_tutari: number; harcama_id: string }[]>([])
   const [odemeler, setOdemeler] = useState<{ odeyen_id: string; alan_id: string; tutar: number }[]>([])
   const [kopyalandi, setKopyalandi] = useState(false)
+  const [ibanKopyalandi, setIbanKopyalandi] = useState<string | null>(null)
   const [mevcutKullaniciId, setMevcutKullaniciId] = useState('')
+  const [acikKisi, setAcikKisi] = useState<string | null>(null)
 
   const [onayAcik, setOnayAcik] = useState(false)
   const [mutabakatSecili, setMutabakatSecili] = useState<{ borcluId: string; alacakliId: string; tutar: number } | null>(null)
 
   const [ibanDuzenleAcik, setIbanDuzenleAcik] = useState(false)
   const [ibanGirisi, setIbanGirisi] = useState('')
+  const [ibanHata, setIbanHata] = useState('')
   const [ibanKaydediliyor, setIbanKaydediliyor] = useState(false)
 
   const fetchData = useCallback(async () => {
@@ -45,7 +59,7 @@ export default function GrupDetayPage() {
     const { data: uyeVerisi } = await supabase.from('grup_uyeler').select('user_id, ad_soyad, iban').eq('grup_id', grupId)
     setUyeler(uyeVerisi || [])
     const benimKaydim = (uyeVerisi || []).find((u) => u.user_id === user.id)
-    if (benimKaydim) setIbanGirisi(benimKaydim.iban || '')
+    if (benimKaydim) setIbanGirisi(benimKaydim.iban ? ibanFormatla(benimKaydim.iban) : '')
 
     const { data: harcamaVerisi } = await supabase
       .from('grup_harcamalar').select('*').eq('grup_id', grupId).order('tarih', { ascending: false })
@@ -53,8 +67,7 @@ export default function GrupDetayPage() {
 
     const harcamaIds = (harcamaVerisi || []).map((h) => h.id)
     if (harcamaIds.length > 0) {
-      const { data: bolusumVerisi } = await supabase
-        .from('grup_harcama_bolusumu').select('*').in('harcama_id', harcamaIds)
+      const { data: bolusumVerisi } = await supabase.from('grup_harcama_bolusumu').select('*').in('harcama_id', harcamaIds)
       setBolusumler(bolusumVerisi || [])
     } else {
       setBolusumler([])
@@ -68,19 +81,30 @@ export default function GrupDetayPage() {
 
   useEffect(() => { fetchData() }, [fetchData])
 
+  function davetLinkiKopyala() {
+    navigator.clipboard.writeText(`${window.location.origin}/davet/${davetKodu}`)
+    setKopyalandi(true)
+    setTimeout(() => setKopyalandi(false), 2000)
+  }
+
+  function ibanKopyala(iban: string) {
+    navigator.clipboard.writeText(ibanTemizle(iban))
+    setIbanKopyalandi(iban)
+    setTimeout(() => setIbanKopyalandi(null), 2000)
+  }
+
   async function ibanKaydet() {
+    const temiz = ibanTemizle(ibanGirisi)
+    if (temiz && !ibanGecerliMi(temiz)) {
+      setIbanHata('IBAN formatı geçersiz görünüyor. TR ile başlayıp 24 rakamla devam etmeli.')
+      return
+    }
+    setIbanHata('')
     setIbanKaydediliyor(true)
-    await supabase.from('grup_uyeler').update({ iban: ibanGirisi || null }).eq('grup_id', grupId).eq('user_id', mevcutKullaniciId)
+    await supabase.from('grup_uyeler').update({ iban: temiz || null }).eq('grup_id', grupId).eq('user_id', mevcutKullaniciId)
     setIbanKaydediliyor(false)
     setIbanDuzenleAcik(false)
     fetchData()
-  }
-
-  function davetLinkiKopyala() {
-    const link = `${window.location.origin}/davet/${davetKodu}`
-    navigator.clipboard.writeText(link)
-    setKopyalandi(true)
-    setTimeout(() => setKopyalandi(false), 2000)
   }
 
   function mutabakatTikla(oneri: { borcluId: string; alacakliId: string; tutar: number }) {
@@ -92,10 +116,7 @@ export default function GrupDetayPage() {
     if (!mutabakatSecili) return
     setOnayAcik(false)
     await supabase.from('grup_odemeler').insert({
-      grup_id: grupId,
-      odeyen_id: mutabakatSecili.borcluId,
-      alan_id: mutabakatSecili.alacakliId,
-      tutar: mutabakatSecili.tutar,
+      grup_id: grupId, odeyen_id: mutabakatSecili.borcluId, alan_id: mutabakatSecili.alacakliId, tutar: mutabakatSecili.tutar,
     })
     fetchData()
   }
@@ -107,6 +128,16 @@ export default function GrupDetayPage() {
   const bakiyeler = bakiyeHesapla(harcamalar, bolusumler, odemeler, uyeler)
   const oneriler = mutabakatOner(bakiyeler)
   const benimBakiyem = bakiyeler.find((b) => b.userId === mevcutKullaniciId)
+
+  // Kim ne kadar harcadı (pasta grafik için)
+  const harcamaDilimleri = uyeler
+    .map((u) => ({
+      ad: u.ad_soyad || 'Bilinmeyen',
+      tutar: harcamalar.filter((h) => h.odeyen_id === u.user_id).reduce((s, h) => s + Number(h.tutar), 0),
+      renk: kisiRengi(u.ad_soyad || u.user_id),
+    }))
+    .filter((d) => d.tutar > 0)
+    .sort((a, b) => b.tutar - a.tutar)
 
   return (
     <div className="min-h-screen bg-paper">
@@ -138,64 +169,31 @@ export default function GrupDetayPage() {
         )}
 
         <div className="flex gap-2 mb-3">
-          <Link href={`/dashboard/gruplar/${grupId}/harcama-ekle`} className="flex-1 bg-navy text-paper text-sm font-medium rounded-lg py-2.5 text-center hover:bg-navy-light transition-colors">
-            + Harcama Ekle
-          </Link>
-          <Link href={`/dashboard/gruplar/${grupId}/sohbet`} className="flex-1 bg-white border border-border text-navy text-sm font-medium rounded-lg py-2.5 text-center hover:bg-paper transition-colors">
-            💬 Sohbet
-          </Link>
+          <GrupHarcamaEkleModal grupId={grupId} />
+          <SohbetModal grupId={grupId} grupAdi={grupAdi} />
         </div>
         <button onClick={davetLinkiKopyala} className="w-full bg-white border border-border text-navy text-sm font-medium rounded-lg py-2.5 mb-6 hover:bg-paper transition-colors">
           {kopyalandi ? '✓ Kopyalandı' : '🔗 Davet Linkini Kopyala'}
         </button>
 
-        <h2 className="text-sm font-medium text-muted mb-3">Kim Kime Ne Kadar Borçlu</h2>
-        {oneriler.length === 0 ? (
-          <p className="text-muted text-sm bg-white rounded-lg p-4 border border-border mb-8">Herkesin hesabı kapalı — kimse kimseye borçlu değil. 🎉</p>
-        ) : (
-          <div className="flex flex-col gap-2 mb-8">
-            {oneriler.map((o, i) => {
-              const alacakliIban = uyeler.find((u) => u.user_id === o.alacakliId)?.iban
-              return (
-                <div key={i} className="bg-white rounded-lg p-4 border border-border">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm text-navy flex-1">
-                      <b>{o.borcluAd}</b> → <b>{o.alacakliAd}</b>
-                    </p>
-                    <span className="font-mono text-navy text-sm">{o.tutar.toLocaleString('tr-TR')} ₺</span>
-                  </div>
-                  {o.borcluId === mevcutKullaniciId && alacakliIban && (
-                    <p className="text-[11px] text-muted font-mono mt-1">Gönderilecek IBAN: {alacakliIban}</p>
-                  )}
-                  {(o.borcluId === mevcutKullaniciId || o.alacakliId === mevcutKullaniciId) && (
-                    <button
-                      onClick={() => mutabakatTikla(o)}
-                      className="text-xs text-sage underline mt-2"
-                    >
-                      Ödendi İşaretle
-                    </button>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        )}
-
+        {/* IBAN düzenleme */}
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-medium text-muted">Üyeler</h2>
+          <h2 className="text-sm font-medium text-muted">IBAN'ım</h2>
           <button onClick={() => setIbanDuzenleAcik((a) => !a)} className="text-xs text-navy underline">
-            IBAN'ımı Düzenle
+            {ibanDuzenleAcik ? 'Vazgeç' : 'Düzenle'}
           </button>
         </div>
-
         {ibanDuzenleAcik && (
           <div className="bg-white rounded-lg p-4 border border-border mb-3 flex flex-col gap-2">
-            <label className="text-xs text-muted">Ödeme almak için IBAN'ın (diğer üyeler görebilir)</label>
+            <label className="text-xs text-muted">Ödeme almak için IBAN'ın (diğer üyeler görüp kopyalayabilir)</label>
             <input
-              type="text" value={ibanGirisi} onChange={(e) => setIbanGirisi(e.target.value)}
+              type="text" value={ibanGirisi}
+              onChange={(e) => { setIbanGirisi(ibanFormatla(e.target.value)); setIbanHata('') }}
               placeholder="TR00 0000 0000 0000 0000 0000 00"
+              maxLength={32}
               className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-white font-mono"
             />
+            {ibanHata && <p className="text-xs text-brick">{ibanHata}</p>}
             <button onClick={ibanKaydet} disabled={ibanKaydediliyor}
               className="bg-navy text-paper text-xs font-medium rounded-lg py-2 hover:bg-navy-light transition-colors disabled:opacity-60">
               {ibanKaydediliyor ? 'Kaydediliyor...' : 'Kaydet'}
@@ -203,20 +201,77 @@ export default function GrupDetayPage() {
           </div>
         )}
 
+        {/* Pasta grafik — kim ne kadar harcadı */}
+        {harcamaDilimleri.length > 0 && (
+          <div className="mb-8">
+            <h2 className="text-sm font-medium text-muted mb-3">Kim Ne Kadar Harcadı</h2>
+            <div className="bg-white rounded-lg p-4 border border-border">
+              <PastaGrafik dilimler={harcamaDilimleri} />
+            </div>
+          </div>
+        )}
+
+        {/* Kişi listesi — tıklayınca o kişinin borçları/alacakları açılır */}
+        <h2 className="text-sm font-medium text-muted mb-3">Kim Kime Ne Kadar Borçlu</h2>
         <div className="flex flex-col gap-2 mb-8">
           {uyeler.map((u) => {
             const b = bakiyeler.find((bk) => bk.userId === u.user_id)
+            const benimBorclarim = oneriler.filter((o) => o.borcluId === u.user_id)
+            const banaBorclu = oneriler.filter((o) => o.alacakliId === u.user_id)
+            const acik = acikKisi === u.user_id
+            const hareketVar = benimBorclarim.length > 0 || banaBorclu.length > 0
+
             return (
-              <div key={u.user_id} className="bg-white rounded-lg p-3 border border-border flex items-center gap-3">
-                <Monogram isim={u.ad_soyad || '?'} boyut={30} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-navy truncate">{u.ad_soyad}</p>
-                  {u.iban && <p className="text-[11px] text-muted font-mono truncate">{u.iban}</p>}
-                </div>
-                {b && (
-                  <span className={`font-mono text-xs ${b.net >= 0 ? 'text-sage' : 'text-brick'}`}>
-                    {b.net >= 0 ? '+' : ''}{b.net.toLocaleString('tr-TR')} ₺
-                  </span>
+              <div key={u.user_id} className="bg-white rounded-lg border border-border overflow-hidden">
+                <button
+                  onClick={() => setAcikKisi(acik ? null : u.user_id)}
+                  disabled={!hareketVar}
+                  className="w-full p-3 flex items-center gap-3 text-left disabled:cursor-default"
+                >
+                  <Monogram isim={u.ad_soyad || '?'} boyut={30} />
+                  <p className="text-sm text-navy flex-1 truncate">{u.ad_soyad}</p>
+                  {b && Math.abs(b.net) > 0.5 && (
+                    <span className={`font-mono text-xs ${b.net >= 0 ? 'text-sage' : 'text-brick'}`}>
+                      {b.net >= 0 ? '+' : ''}{b.net.toLocaleString('tr-TR')} ₺
+                    </span>
+                  )}
+                  {b && Math.abs(b.net) <= 0.5 && <span className="text-xs text-muted">Kapalı</span>}
+                  {hareketVar && <span className="text-muted text-xs">{acik ? '▲' : '▼'}</span>}
+                </button>
+
+                {acik && hareketVar && (
+                  <div className="border-t border-border px-3 py-3 flex flex-col gap-2 bg-paper/50">
+                    {benimBorclarim.map((o, i) => {
+                      const alacakli = uyeler.find((uu) => uu.user_id === o.alacakliId)
+                      return (
+                        <div key={`b-${i}`} className="bg-white rounded-lg p-3 border border-brick/30">
+                          <p className="text-xs text-navy">
+                            <b>{o.borcluAd}</b> → <b>{o.alacakliAd}</b>'a <span className="font-mono">{o.tutar.toLocaleString('tr-TR')} ₺</span> ödemeli
+                          </p>
+                          {alacakli?.iban && (
+                            <button
+                              onClick={() => ibanKopyala(alacakli.iban!)}
+                              className="text-[11px] text-muted font-mono mt-1.5 flex items-center gap-1.5 hover:text-navy transition-colors"
+                            >
+                              📋 {ibanFormatla(alacakli.iban)} {ibanKopyalandi === alacakli.iban ? '· Kopyalandı ✓' : '· kopyala'}
+                            </button>
+                          )}
+                          {(o.borcluId === mevcutKullaniciId || o.alacakliId === mevcutKullaniciId) && (
+                            <button onClick={() => mutabakatTikla(o)} className="text-xs text-sage underline mt-2 block">
+                              Ödendi İşaretle
+                            </button>
+                          )}
+                        </div>
+                      )
+                    })}
+                    {banaBorclu.map((o, i) => (
+                      <div key={`a-${i}`} className="bg-white rounded-lg p-3 border border-sage/30">
+                        <p className="text-xs text-navy">
+                          <b>{o.borcluAd}</b>, <b>{o.alacakliAd}</b>'dan <span className="font-mono">{o.tutar.toLocaleString('tr-TR')} ₺</span> alacaklı
+                        </p>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
             )

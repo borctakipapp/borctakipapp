@@ -6,6 +6,8 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import AppSayfaDuzeni from '@/components/AppSayfaDuzeni'
 import OnayModal from '@/components/OnayModal'
+import GelirGiderEkleModal from '@/components/GelirGiderEkleModal'
+import CSVIceAktarModal from '@/components/CSVIceAktarModal'
 import Secim from '@/components/Secim'
 
 const AY_ISIMLERI = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık']
@@ -679,19 +681,15 @@ function GelirGiderPageIc() {
           </div>
         </div>
 
-        <div className="flex gap-2 mb-8">
-          <Link
-            href={`/dashboard/gelir-gider/ekle?ay=${ay}&yil=${yil}`}
-            className="bg-navy text-paper text-sm font-medium rounded-lg px-4 py-2.5 hover:bg-navy-light transition-colors"
-          >
-            + Gelir / Gider Ekle
-          </Link>
+        <div className="flex flex-wrap gap-2 mb-8">
+          <GelirGiderEkleModal hedefAy={ay} hedefYil={yil} />
           <Link
             href="/dashboard/gelir-gider/duzenli"
             className="bg-white border border-border text-navy text-sm font-medium rounded-lg px-4 py-2.5 hover:bg-paper transition-colors"
           >
             ↻ Düzenli İşlemler
           </Link>
+          <CSVIceAktarModal />
         </div>
 
         {giderKategorileri.length > 0 && (

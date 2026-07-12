@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import AppSayfaDuzeni from '@/components/AppSayfaDuzeni'
 import Monogram from '@/components/Monogram'
+import BirikimEkleModal from '@/components/BirikimEkleModal'
 
 export default async function BirikimPage() {
   const supabase = await createClient()
@@ -28,12 +29,9 @@ export default async function BirikimPage() {
           {hedefler && hedefler.length > 0 ? `${hedefler.length} hedef üzerinde çalışıyorsun.` : 'Henüz bir hedefin yok.'}
         </p>
 
-        <Link
-          href="/dashboard/birikim/ekle"
-          className="inline-block mb-8 bg-navy text-paper text-sm font-medium rounded-lg px-4 py-2.5 hover:bg-navy-light transition-colors"
-        >
-          + Yeni Hedef Ekle
-        </Link>
+        <div className="mb-8">
+          <BirikimEkleModal />
+        </div>
 
         <h2 className="text-sm font-medium text-muted mb-3">Hedefleriniz</h2>
 

@@ -164,6 +164,53 @@ export default async function OzetPage() {
   const oncekiAyNet = oncekiGelir - oncekiGider - oncekiBorcOdemesi
   const oncekiVeriVar = (oncekiAyTx && oncekiAyTx.length > 0) || oncekiBorcOdemesi > 0
 
+  // Rozetler (küçük başarılar) — mevcut veriden hesaplanıyor, ayrı bir tablo gerekmiyor
+  const { data: kapanmisBorclar } = await supabase.from('debts').select('id').eq('user_id', user.id).eq('status', 'paid').limit(1)
+  const ilkBorcKapandi = (kapanmisBorclar || []).length > 0
+
+  const ilkHedefTamamlandi = (hedefler || []).some((h) => Number(h.current_amount) >= Number(h.target_amount) && Number(h.target_amount) > 0)
+
+  const { data: benimGruplarim } = await supabase.from('gruplar').select('id').eq('olusturan_id', user.id).limit(1)
+  const ilkGrupKuruldu = (benimGruplarim || []).length > 0
+
+  // Streak: son 3 ay üst üste net pozitif miydi (basitleştirilmiş, gerçek zamanında ödeme takibi değil — elimizdeki veriyle en dürüst hesaplama bu)
+  async function ayNetiHesapla(hedefAyOffset: number) {
+    const tarih = new Date(yil, ay - hedefAyOffset, 1)
+    const y = tarih.getFullYear()
+    const m = tarih.getMonth()
+    const bas = `${y}-${ikiBasamakOz(m + 1)}-01`
+    const bitYil = m === 11 ? y + 1 : y
+    const bitAy = m === 11 ? 0 : m + 1
+    const bit = `${bitYil}-${ikiBasamakOz(bitAy + 1)}-01`
+
+    const { data: tx } = await supabase.from('transactions').select('type, amount').eq('user_id', user.id).gte('transaction_date', bas).lt('transaction_date', bit)
+    const gelir = (tx || []).filter((t) => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0)
+    const gider = (tx || []).filter((t) => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0)
+
+    let borcOdeme = 0
+    if (debtIds.length > 0) {
+      const { data: pay } = await supabase.from('payments').select('amount').in('debt_id', debtIds).gte('paid_at', `${bas}T00:00:00`).lt('paid_at', `${bit}T00:00:00`)
+      borcOdeme = (pay || []).reduce((s, p) => s + Number(p.amount), 0)
+    }
+    const veriVar = (tx && tx.length > 0) || borcOdeme > 0
+    return { net: gelir - gider - borcOdeme, veriVar }
+  }
+
+  let streakAySayisi = 0
+  for (let i = 0; i < 6; i++) {
+    const { net, veriVar } = await ayNetiHesapla(i)
+    if (!veriVar) break
+    if (net >= 0) streakAySayisi++
+    else break
+  }
+
+  const rozetler = [
+    { anahtar: 'ilk-borc', ikon: '🎉', etiket: 'İlk Borç Kapatma', kazanildi: ilkBorcKapandi },
+    { anahtar: 'ilk-hedef', ikon: '🎯', etiket: 'İlk Hedef Tamamlama', kazanildi: ilkHedefTamamlandi },
+    { anahtar: 'ilk-grup', ikon: '👥', etiket: 'İlk Grup Kurma', kazanildi: ilkGrupKuruldu },
+    { anahtar: 'streak-3', ikon: '📈', etiket: '3 Ay Üst Üste Pozitif', kazanildi: streakAySayisi >= 3 },
+  ]
+
   // Finansal Sağlık Skoru (0-100)
   const borcGelirOrani = buAyGelir > 0 ? aylikBorcYuku / buAyGelir : null
   const skorNedenleri: string[] = []
@@ -331,6 +378,15 @@ export default async function OzetPage() {
             </div>
           )}
 
+          {streakAySayisi >= 2 && (
+            <div className="flex items-start gap-2.5">
+              <span className="text-lg leading-none">🔥</span>
+              <p className="text-sm text-navy">
+                <b className="text-sage">{streakAySayisi} ay üst üste</b> net pozitiftesin, harika gidiyor
+              </p>
+            </div>
+          )}
+
           {aktifHedef && (
             <Link href={`/dashboard/birikim/${aktifHedef.id}`} className="flex items-start gap-2.5 hover:opacity-80 transition-opacity">
               <span className="text-lg leading-none">🎯</span>
@@ -343,6 +399,22 @@ export default async function OzetPage() {
           {!enYakinOdeme && !aktifHedef && (
             <p className="text-sm text-muted">Şu an takip edilecek yaklaşan bir şey yok — güzel bir gün!</p>
           )}
+        </div>
+
+        {/* Rozetler */}
+        <h2 className="text-sm font-medium text-muted mb-3">Başarılarım</h2>
+        <div className="grid grid-cols-4 gap-2 mb-8">
+          {rozetler.map((r) => (
+            <div
+              key={r.anahtar}
+              className={`flex flex-col items-center gap-1 p-3 rounded-lg border text-center ${
+                r.kazanildi ? 'bg-sage-soft border-sage' : 'bg-white border-border opacity-40'
+              }`}
+            >
+              <span className="text-xl">{r.ikon}</span>
+              <span className="text-[10px] text-navy leading-tight">{r.etiket}</span>
+            </div>
+          ))}
         </div>
 
         {/* İkincil rakamlar — sade, beyaz kartlar */}

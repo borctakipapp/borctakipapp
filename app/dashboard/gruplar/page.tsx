@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import AppSayfaDuzeni from '@/components/AppSayfaDuzeni'
 import Monogram from '@/components/Monogram'
+import GrupOlusturModal from '@/components/GrupOlusturModal'
 
 export default async function GruplarPage() {
   const supabase = await createClient()
@@ -22,12 +23,9 @@ export default async function GruplarPage() {
         <p className="text-sm text-muted mb-1">Ortak Hesap</p>
         <p className="text-2xl font-medium text-navy mb-6">Gruplarım</p>
 
-        <Link
-          href="/dashboard/gruplar/olustur"
-          className="inline-block mb-8 bg-navy text-paper text-sm font-medium rounded-lg px-4 py-2.5 hover:bg-navy-light transition-colors"
-        >
-          + Yeni Grup Oluştur
-        </Link>
+        <div className="mb-8">
+          <GrupOlusturModal />
+        </div>
 
         {gruplar.length === 0 ? (
           <p className="text-muted text-sm bg-white rounded-lg p-4 border border-border">

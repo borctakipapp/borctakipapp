@@ -1,9 +1,10 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter, useParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import Secim from '@/components/Secim'
+import Secim from './Secim'
+import Modal from './Modal'
 
 type Uye = { user_id: string; ad_soyad: string | null }
 
@@ -12,12 +13,10 @@ function bugunMetniGrup() {
   return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`
 }
 
-export default function HarcamaEklePage() {
+export default function GrupHarcamaEkleModal({ grupId }: { grupId: string }) {
   const router = useRouter()
-  const params = useParams()
   const supabase = createClient()
-  const grupId = params.id as string
-
+  const [acik, setAcik] = useState(false)
   const [uyeler, setUyeler] = useState<Uye[]>([])
   const [odeyenId, setOdeyenId] = useState('')
   const [aciklama, setAciklama] = useState('')
@@ -28,6 +27,7 @@ export default function HarcamaEklePage() {
   const [message, setMessage] = useState('')
 
   useEffect(() => {
+    if (!acik) return
     async function fetchUyeler() {
       const { data } = await supabase.from('grup_uyeler').select('user_id, ad_soyad').eq('grup_id', grupId)
       setUyeler(data || [])
@@ -37,7 +37,7 @@ export default function HarcamaEklePage() {
       if (user) setOdeyenId(user.id)
     }
     fetchUyeler()
-  }, [grupId])
+  }, [acik, grupId])
 
   function uyeSecimiDegistir(userId: string) {
     setSecilenUyeler((prev) => {
@@ -45,6 +45,11 @@ export default function HarcamaEklePage() {
       if (next.has(userId)) next.delete(userId); else next.add(userId)
       return next
     })
+  }
+
+  function sifirlaVeKapat() {
+    setAcik(false)
+    setAciklama(''); setTutar(''); setTarih(bugunMetniGrup()); setMessage('')
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -59,47 +64,32 @@ export default function HarcamaEklePage() {
     setLoading(true)
 
     const { data: harcama, error } = await supabase
-      .from('grup_harcamalar')
-      .insert({ grup_id: grupId, odeyen_id: odeyenId, aciklama, tutar: tutarSayi, tarih })
-      .select()
-      .single()
+      .from('grup_harcamalar').insert({ grup_id: grupId, odeyen_id: odeyenId, aciklama, tutar: tutarSayi, tarih }).select().single()
 
-    if (error || !harcama) {
-      setMessage('Hata: ' + (error?.message || 'Harcama eklenemedi.'))
-      setLoading(false)
-      return
-    }
+    if (error || !harcama) { setMessage('Hata: ' + (error?.message || 'Harcama eklenemedi.')); setLoading(false); return }
 
     const kisiBasi = Math.round((tutarSayi / secilenUyeler.size) * 100) / 100
-    const bolusumler = Array.from(secilenUyeler).map((uid) => ({
-      harcama_id: harcama.id,
-      user_id: uid,
-      pay_tutari: kisiBasi,
-    }))
+    const bolusumler = Array.from(secilenUyeler).map((uid) => ({ harcama_id: harcama.id, user_id: uid, pay_tutari: kisiBasi }))
 
     const { error: bolusumError } = await supabase.from('grup_harcama_bolusumu').insert(bolusumler)
 
-    if (bolusumError) {
-      setMessage('Hata: ' + bolusumError.message)
-      setLoading(false)
-      return
-    }
+    if (bolusumError) { setMessage('Hata: ' + bolusumError.message); setLoading(false); return }
 
-    router.push(`/dashboard/gruplar/${grupId}`)
+    setLoading(false)
+    sifirlaVeKapat()
     router.refresh()
   }
 
   return (
-    <div className="min-h-screen bg-paper">
-      <header className="bg-navy px-6 py-4 flex items-center">
-        <button onClick={() => router.push(`/dashboard/gruplar/${grupId}`)} className="text-paper/70 hover:text-paper text-sm">
-          ← Geri dön
-        </button>
-      </header>
+    <>
+      <button
+        onClick={() => setAcik(true)}
+        className="flex-1 bg-navy text-paper text-sm font-medium rounded-lg py-2.5 text-center hover:bg-navy-light transition-colors"
+      >
+        + Harcama Ekle
+      </button>
 
-      <main className="max-w-md mx-auto px-6 py-10">
-        <h1 className="text-xl font-medium text-navy mb-6">Harcama Ekle</h1>
-
+      <Modal acik={acik} baslik="Harcama Ekle" onKapat={sifirlaVeKapat}>
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           <div>
             <label className="text-xs text-muted mb-1 block">Ne için?</label>
@@ -107,27 +97,22 @@ export default function HarcamaEklePage() {
               placeholder="Örn: Otel, Akşam Yemeği, Benzin"
               className="w-full px-3 py-2.5 border border-border rounded-lg text-sm bg-white" />
           </div>
-
           <div>
             <label className="text-xs text-muted mb-1 block">Tutar (₺)</label>
             <input type="number" step="0.01" value={tutar} onChange={(e) => setTutar(e.target.value)} required
               className="w-full px-3 py-2.5 border border-border rounded-lg text-sm bg-white font-mono" />
           </div>
-
           <div>
             <label className="text-xs text-muted mb-1 block">Kim Ödedi</label>
-            <Secim value={odeyenId} onChange={(e) => setOdeyenId(e.target.value)}
-              className="w-full px-3 py-2.5 border border-border rounded-lg text-sm bg-white">
+            <Secim value={odeyenId} onChange={(e) => setOdeyenId(e.target.value)}>
               {uyeler.map((u) => <option key={u.user_id} value={u.user_id}>{u.ad_soyad}</option>)}
             </Secim>
           </div>
-
           <div>
             <label className="text-xs text-muted mb-1 block">Tarih</label>
             <input type="date" value={tarih} onChange={(e) => setTarih(e.target.value)}
               className="w-full px-3 py-2.5 border border-border rounded-lg text-sm bg-white" />
           </div>
-
           <div>
             <label className="text-xs text-muted mb-1 block">Kimler Arasında Bölüşülecek</label>
             <div className="flex flex-col gap-1.5">
@@ -144,15 +129,13 @@ export default function HarcamaEklePage() {
               </p>
             )}
           </div>
-
           <button type="submit" disabled={loading}
             className="mt-2 bg-navy text-paper text-sm font-medium rounded-lg py-2.5 hover:bg-navy-light transition-colors disabled:opacity-60">
             {loading ? 'Kaydediliyor...' : 'Harcamayı Kaydet'}
           </button>
-
           {message && <p className="text-xs text-brick mt-1">{message}</p>}
         </form>
-      </main>
-    </div>
+      </Modal>
+    </>
   )
 }
