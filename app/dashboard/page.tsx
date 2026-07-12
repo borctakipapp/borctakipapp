@@ -17,6 +17,7 @@ export default async function OzetPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
+  const userId = user.id
 
   const simdi = new Date()
   const yil = simdi.getFullYear()
@@ -26,14 +27,14 @@ export default async function OzetPage() {
   const bitisAy = ay === 11 ? 0 : ay + 1
   const bitisStr = `${bitisYil}-${ikiBasamakOz(bitisAy + 1)}-01`
 
-  const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single()
+  const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', userId).single()
   const ilkIsim = profile?.full_name ? profile.full_name.split(' ')[0] : null
 
   // Borçlar
   const { data: debts } = await supabase
     .from('debts')
     .select('*')
-    .eq('user_id', user.id)
+    .eq('user_id', userId)
     .eq('status', 'active')
     .order('due_date', { ascending: true })
 
@@ -43,7 +44,7 @@ export default async function OzetPage() {
   const { data: hedefler } = await supabase
     .from('savings_goals')
     .select('id, goal_name, current_amount, target_amount')
-    .eq('user_id', user.id)
+    .eq('user_id', userId)
     .order('created_at', { ascending: true })
 
   const toplamBirikim = (hedefler || []).reduce((s, h) => s + Number(h.current_amount), 0)
@@ -112,7 +113,7 @@ export default async function OzetPage() {
   const { data: buAyTx } = await supabase
     .from('transactions')
     .select('type, category, amount')
-    .eq('user_id', user.id)
+    .eq('user_id', userId)
     .gte('transaction_date', baslangicStr)
     .lt('transaction_date', bitisStr)
 
@@ -143,7 +144,7 @@ export default async function OzetPage() {
   const { data: oncekiAyTx } = await supabase
     .from('transactions')
     .select('type, amount')
-    .eq('user_id', user.id)
+    .eq('user_id', userId)
     .gte('transaction_date', oncekiBaslangicStr)
     .lt('transaction_date', baslangicStr)
 
@@ -165,12 +166,12 @@ export default async function OzetPage() {
   const oncekiVeriVar = (oncekiAyTx && oncekiAyTx.length > 0) || oncekiBorcOdemesi > 0
 
   // Rozetler (küçük başarılar) — mevcut veriden hesaplanıyor, ayrı bir tablo gerekmiyor
-  const { data: kapanmisBorclar } = await supabase.from('debts').select('id').eq('user_id', user.id).eq('status', 'paid').limit(1)
+  const { data: kapanmisBorclar } = await supabase.from('debts').select('id').eq('user_id', userId).eq('status', 'paid').limit(1)
   const ilkBorcKapandi = (kapanmisBorclar || []).length > 0
 
   const ilkHedefTamamlandi = (hedefler || []).some((h) => Number(h.current_amount) >= Number(h.target_amount) && Number(h.target_amount) > 0)
 
-  const { data: benimGruplarim } = await supabase.from('gruplar').select('id').eq('olusturan_id', user.id).limit(1)
+  const { data: benimGruplarim } = await supabase.from('gruplar').select('id').eq('olusturan_id', userId).limit(1)
   const ilkGrupKuruldu = (benimGruplarim || []).length > 0
 
   // Streak: son 3 ay üst üste net pozitif miydi (basitleştirilmiş, gerçek zamanında ödeme takibi değil — elimizdeki veriyle en dürüst hesaplama bu)
@@ -183,7 +184,7 @@ export default async function OzetPage() {
     const bitAy = m === 11 ? 0 : m + 1
     const bit = `${bitYil}-${ikiBasamakOz(bitAy + 1)}-01`
 
-    const { data: tx } = await supabase.from('transactions').select('type, amount').eq('user_id', user.id).gte('transaction_date', bas).lt('transaction_date', bit)
+    const { data: tx } = await supabase.from('transactions').select('type, amount').eq('user_id', userId).gte('transaction_date', bas).lt('transaction_date', bit)
     const gelir = (tx || []).filter((t) => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0)
     const gider = (tx || []).filter((t) => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0)
 
