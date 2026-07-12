@@ -7,6 +7,8 @@ import OnayModal from './OnayModal'
 import Secim from './Secim'
 import Modal from './Modal'
 import { hataMesajiCevir } from '@/lib/hata-mesaji'
+import Skeleton from './Skeleton'
+import { useToast } from './Toast'
 
 const GELIR_KATEGORILERI = ['Maaş', 'Ek Gelir', 'Kira Geliri', 'Yatırım Geliri', 'Diğer Gelir']
 const GIDER_KATEGORILERI = ['Market/Gıda', 'Ulaşım', 'Eğlence', 'Sağlık', 'Giyim', 'Eğitim', 'Kişisel Bakım', 'Diğer Gider']
@@ -25,6 +27,7 @@ type RecurringItem = {
 export default function DuzenliIslemlerModal({ onBasarili }: { onBasarili?: () => void } = {}) {
   const router = useRouter()
   const supabase = createClient()
+  const { goster } = useToast()
   const [acik, setAcik] = useState(false)
   const [loading, setLoading] = useState(true)
   const [items, setItems] = useState<RecurringItem[]>([])
@@ -81,6 +84,7 @@ export default function DuzenliIslemlerModal({ onBasarili }: { onBasarili?: () =
     setSelectedItems(new Set())
     setDeletingSelected(false)
     fetchItems()
+    goster('Seçilen düzenli işlemler silindi.')
     ;(onBasarili ? onBasarili() : router.refresh())
   }
 
@@ -102,12 +106,13 @@ export default function DuzenliIslemlerModal({ onBasarili }: { onBasarili?: () =
     }).eq('id', itemId)
 
     setSaving(false)
-    if (error) { setMessage(hataMesajiCevir(error)) } else { setEditingId(null); fetchItems(); (onBasarili ? onBasarili() : router.refresh()) }
+    if (error) { setMessage(hataMesajiCevir(error)) } else { setEditingId(null); fetchItems(); goster('Düzenli işlem güncellendi.'); (onBasarili ? onBasarili() : router.refresh()) }
   }
 
   async function toggleActive(itemId: string, current: boolean) {
     await supabase.from('recurring_items').update({ active: !current }).eq('id', itemId)
     fetchItems()
+    goster(current ? 'Pasif edildi.' : 'Aktif edildi.')
     ;(onBasarili ? onBasarili() : router.refresh())
   }
 
@@ -116,6 +121,7 @@ export default function DuzenliIslemlerModal({ onBasarili }: { onBasarili?: () =
       setOnayAcik(false)
       await supabase.from('recurring_items').delete().eq('id', itemId)
       fetchItems()
+      goster('Düzenli işlem silindi.')
       ;(onBasarili ? onBasarili() : router.refresh())
     })
   }
@@ -131,7 +137,7 @@ export default function DuzenliIslemlerModal({ onBasarili }: { onBasarili?: () =
 
       <Modal acik={acik} baslik="Düzenli Gelir / Giderler" onKapat={() => setAcik(false)}>
         {loading ? (
-          <p className="text-sm text-muted text-center py-6">Yükleniyor...</p>
+          <Skeleton satirlar={3} />
         ) : (
           <>
             {selectedItems.size > 0 && (

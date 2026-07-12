@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Modal from './Modal'
 import { hataMesajiCevir } from '@/lib/hata-mesaji'
+import { useToast } from './Toast'
 
 type Satir = {
   type: 'income' | 'expense' | null
@@ -47,6 +48,7 @@ function ornekSablonIndir() {
 export default function CSVIceAktarModal({ onBasarili }: { onBasarili?: () => void } = {}) {
   const router = useRouter()
   const supabase = createClient()
+  const { goster } = useToast()
   const [acik, setAcik] = useState(false)
   const [satirlar, setSatirlar] = useState<Satir[]>([])
   const [yukleniyor, setYukleniyor] = useState(false)
@@ -117,6 +119,7 @@ export default function CSVIceAktarModal({ onBasarili }: { onBasarili?: () => vo
     if (error) {
       setMessage(hataMesajiCevir(error))
     } else {
+      goster(`${gecerliSatirlar.length} kayıt içe aktarıldı.`)
       sifirlaVeKapat()
       ;(onBasarili ? onBasarili() : router.refresh())
     }

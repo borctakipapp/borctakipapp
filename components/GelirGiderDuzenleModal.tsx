@@ -7,6 +7,8 @@ import Secim from './Secim'
 import Modal from './Modal'
 import OnayModal from './OnayModal'
 import { hataMesajiCevir } from '@/lib/hata-mesaji'
+import Skeleton from './Skeleton'
+import { useToast } from './Toast'
 
 const GELIR_KATEGORILERI = ['Maaş', 'Ek Gelir', 'Kira Geliri', 'Yatırım Geliri', 'Birikimden Çekim', 'Diğer Gelir']
 const GIDER_KATEGORILERI = ['Market/Gıda', 'Ulaşım', 'Eğlence', 'Sağlık', 'Giyim', 'Eğitim', 'Kişisel Bakım', 'Birikim Aktarımı', 'Diğer Gider']
@@ -20,6 +22,7 @@ function bugun() {
 export default function GelirGiderDuzenleModal({ txId, onBasarili }: { txId: string; onBasarili?: () => void }) {
   const router = useRouter()
   const supabase = createClient()
+  const { goster } = useToast()
   const [acik, setAcik] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -74,6 +77,7 @@ export default function GelirGiderDuzenleModal({ txId, onBasarili }: { txId: str
     } else {
       setSaving(false)
       setAcik(false)
+      goster('Kayıt güncellendi.')
       ;(onBasarili ? onBasarili() : router.refresh())
     }
   }
@@ -88,6 +92,7 @@ export default function GelirGiderDuzenleModal({ txId, onBasarili }: { txId: str
     } else {
       setSaving(false)
       setAcik(false)
+      goster('Kayıt silindi.')
       ;(onBasarili ? onBasarili() : router.refresh())
     }
   }
@@ -98,7 +103,7 @@ export default function GelirGiderDuzenleModal({ txId, onBasarili }: { txId: str
 
       <Modal acik={acik} baslik="Kaydı Düzenle" onKapat={() => setAcik(false)}>
         {loading ? (
-          <p className="text-sm text-muted text-center py-6">Yükleniyor...</p>
+          <Skeleton satirlar={3} />
         ) : (
           <form onSubmit={handleUpdate} className="flex flex-col gap-3">
             <div className="flex gap-2 mb-1">

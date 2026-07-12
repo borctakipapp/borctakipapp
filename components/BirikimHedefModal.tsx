@@ -6,6 +6,8 @@ import { createClient } from '@/lib/supabase/client'
 import OnayModal from './OnayModal'
 import Modal from './Modal'
 import { hataMesajiCevir } from '@/lib/hata-mesaji'
+import Skeleton from './Skeleton'
+import { useToast } from './Toast'
 
 type Entry = { id: string; amount: number; type: 'add' | 'withdraw'; created_at: string }
 
@@ -18,6 +20,7 @@ function bugunMetniBirikim() {
 export default function BirikimHedefModal({ goalId, tetikleyici }: { goalId: string; tetikleyici: React.ReactNode }) {
   const router = useRouter()
   const supabase = createClient()
+  const { goster } = useToast()
   const [acik, setAcik] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -77,6 +80,7 @@ export default function BirikimHedefModal({ goalId, tetikleyici }: { goalId: str
     setEntryAmount('')
     setAddingEntry(false)
     fetchData()
+    goster(entryType === 'add' ? 'Hedefe eklendi.' : 'Hedeften çekildi.')
     router.refresh()
   }
 
@@ -89,7 +93,7 @@ export default function BirikimHedefModal({ goalId, tetikleyici }: { goalId: str
     }).eq('id', goalId)
 
     if (error) { setMessage(hataMesajiCevir(error)); setSaving(false) }
-    else { setSaving(false); setAcik(false); router.refresh() }
+    else { setSaving(false); setAcik(false); goster('Hedef güncellendi.'); router.refresh() }
   }
 
   async function gercekSil() {
@@ -97,7 +101,7 @@ export default function BirikimHedefModal({ goalId, tetikleyici }: { goalId: str
     setSaving(true)
     const { error } = await supabase.from('savings_goals').delete().eq('id', goalId)
     if (error) { setMessage(hataMesajiCevir(error)); setSaving(false) }
-    else { setSaving(false); setAcik(false); router.refresh() }
+    else { setSaving(false); setAcik(false); goster('Hedef silindi.'); router.refresh() }
   }
 
   const oran = targetAmount ? Math.min(100, (parseFloat(currentAmount) / parseFloat(targetAmount)) * 100) : 0
@@ -109,7 +113,7 @@ export default function BirikimHedefModal({ goalId, tetikleyici }: { goalId: str
 
       <Modal acik={acik} baslik={goalName || 'Hedef'} onKapat={() => setAcik(false)}>
         {loading ? (
-          <p className="text-sm text-muted text-center py-6">Yükleniyor...</p>
+          <Skeleton satirlar={3} />
         ) : (
           <>
             <p className="text-sm text-muted mb-2">

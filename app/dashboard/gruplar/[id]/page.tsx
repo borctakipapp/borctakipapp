@@ -13,6 +13,7 @@ import { bakiyeHesapla, mutabakatOner } from '@/lib/grup-hesap'
 import { ibanFormatla, ibanTemizle, ibanGecerliMi } from '@/lib/iban'
 import { useToast } from '@/components/Toast'
 import { hataMesajiCevir } from '@/lib/hata-mesaji'
+import Skeleton from '@/components/Skeleton'
 
 type Uye = { user_id: string; ad_soyad: string | null; iban: string | null }
 type Harcama = { id: string; odeyen_id: string; aciklama: string; tutar: number; tarih: string }
@@ -159,7 +160,15 @@ export default function GrupDetayPage() {
   }
 
   if (loading) {
-    return <div className="min-h-screen bg-paper flex items-center justify-center text-muted text-sm">Yükleniyor...</div>
+    return (
+      <main className="max-w-md mx-auto px-6 py-8">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-10 h-10 rounded-full bg-border animate-pulse" />
+          <div className="h-4 bg-border rounded w-32 animate-pulse" />
+        </div>
+        <Skeleton satirlar={5} />
+      </main>
+    )
   }
 
   const bakiyeler = bakiyeHesapla(harcamalar, bolusumler, odemeler, uyeler)

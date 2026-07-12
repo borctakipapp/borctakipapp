@@ -9,6 +9,7 @@ import Modal from './Modal'
 import Monogram from './Monogram'
 import { useToast } from './Toast'
 import { hataMesajiCevir } from '@/lib/hata-mesaji'
+import Skeleton from './Skeleton'
 
 const KATEGORILER = [
   { value: 'kredi_karti', label: 'Kredi Kartı' }, { value: 'ihtiyac_kredisi', label: 'İhtiyaç Kredisi' },
@@ -251,7 +252,7 @@ export default function BorcDetayModal({ debtId, tetikleyici, onBasarili }: { de
 
       <Modal acik={acik} baslik={institutionName || 'Borç Detayı'} onKapat={() => setAcik(false)}>
         {loading ? (
-          <p className="text-sm text-muted text-center py-6">Yükleniyor...</p>
+          <Skeleton satirlar={3} />
         ) : (
           <>
             <div className="flex items-center gap-3 mb-3">

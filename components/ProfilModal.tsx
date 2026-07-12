@@ -6,12 +6,15 @@ import { TURKIYE_IL_ILCE, TURKIYE_ILLERI } from '@/lib/turkiye-il-ilce'
 import Secim from './Secim'
 import Modal from './Modal'
 import { hataMesajiCevir } from '@/lib/hata-mesaji'
+import { useToast } from './Toast'
+import Skeleton from './Skeleton'
 
 const CINSIYET_SECENEKLERI = ['Kadın', 'Erkek', 'Belirtmek istemiyorum']
 const GELIR_ARALIKLARI = ['15.000 ₺ altı', '15.000 - 25.000 ₺', '25.000 - 40.000 ₺', '40.000 - 60.000 ₺', '60.000 ₺ ve üzeri', 'Belirtmek istemiyorum']
 
 export default function ProfilModal({ tetikleyici }: { tetikleyici: React.ReactNode }) {
   const supabase = createClient()
+  const { goster } = useToast()
   const [acik, setAcik] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -64,6 +67,7 @@ export default function ProfilModal({ tetikleyici }: { tetikleyici: React.ReactN
 
     setSaving(false)
     setMessage(error ? hataMesajiCevir(error) : 'Kaydedildi.')
+    if (!error) goster('Profilin kaydedildi.')
   }
 
   return (
@@ -72,7 +76,7 @@ export default function ProfilModal({ tetikleyici }: { tetikleyici: React.ReactN
 
       <Modal acik={acik} baslik="Profilim" onKapat={() => setAcik(false)}>
         {loading ? (
-          <p className="text-sm text-muted text-center py-6">Yükleniyor...</p>
+          <Skeleton satirlar={3} />
         ) : (
           <>
             <p className="text-sm text-muted mb-1">{email}</p>
