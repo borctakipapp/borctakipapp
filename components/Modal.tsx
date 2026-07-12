@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 
 export default function Modal({
   acik, baslik, onKapat, children,
@@ -11,13 +12,11 @@ export default function Modal({
   children: React.ReactNode
 }) {
   const icerikRef = useRef<HTMLDivElement>(null)
+  const [monteEdildi, setMonteEdildi] = useState(false)
 
-  // onKapat her render'da yeni bir referans olabilir (ebeveyn genelde inline fonksiyon veriyor).
-  // Bunu doğrudan aşağıdaki effect'in bağımlılığına koyarsak, kullanıcı bir input'a her karakter
-  // yazdığında (state güncellenip ebeveyn yeniden render olduğunda) effect gereksiz yere tekrar
-  // çalışır ve odağı input'tan çalıp modale geri verir — bu da "her ikinci karakter kayboluyor"
-  // hatasına yol açar. Ref ile sarmalayıp asıl focus/ESC effect'ini SADECE "acik" değiştiğinde
-  // çalıştırıyoruz.
+  // Portal sadece tarayıcıda (document var olduğunda) çalışabilir — SSR'da document yok.
+  useEffect(() => { setMonteEdildi(true) }, [])
+
   const onKapatRef = useRef(onKapat)
   useEffect(() => { onKapatRef.current = onKapat })
 
@@ -39,15 +38,17 @@ export default function Modal({
       document.body.style.overflow = eskiOverflow
       clearTimeout(zamanlayici)
     }
-    // Bilerek sadece "acik" — modal açılınca/kapanınca bir kez çalışsın, her render'da değil.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [acik])
 
-  if (!acik) return null
+  if (!acik || !monteEdildi) return null
 
-  return (
+  // React Portal: modal artık sayfanın DOM ağacındaki yerinden bağımsız, doğrudan <body>'nin
+  // sonuna ekleniyor — böylece hiçbir ebeveyn elemanın (kenar çubuğu, sticky/transform vs.)
+  // katman (z-index/stacking context) sorunlarından etkilenmiyor, her zaman en üstte kalıyor.
+  return createPortal(
     <div
-      className="fixed inset-0 bg-navy/40 flex items-end sm:items-center justify-center z-50"
+      className="fixed inset-0 bg-navy/40 flex items-end sm:items-center justify-center z-[100]"
       onClick={onKapat}
     >
       <div
@@ -65,6 +66,7 @@ export default function Modal({
         </div>
         <div className="p-5">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

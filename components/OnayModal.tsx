@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 
 type OnayModalProps = {
   acik: boolean
@@ -17,8 +18,10 @@ export default function OnayModal({
   acik, baslik, mesaj, onayMetni = 'Sil', vazgecMetni = 'Vazgeç', tehlikeli = true, onOnayla, onVazgec,
 }: OnayModalProps) {
   const vazgecRef = useRef<HTMLButtonElement>(null)
+  const [monteEdildi, setMonteEdildi] = useState(false)
 
-  // Aynı odak-çalma sorununu önlemek için onVazgec'i ref'e sarmalıyoruz (bkz. Modal.tsx notu)
+  useEffect(() => { setMonteEdildi(true) }, [])
+
   const onVazgecRef = useRef(onVazgec)
   useEffect(() => { onVazgecRef.current = onVazgec })
 
@@ -36,10 +39,10 @@ export default function OnayModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [acik])
 
-  if (!acik) return null
+  if (!acik || !monteEdildi) return null
 
-  return (
-    <div className="fixed inset-0 bg-navy/40 flex items-center justify-center z-50 px-6" onClick={onVazgec}>
+  return createPortal(
+    <div className="fixed inset-0 bg-navy/40 flex items-center justify-center z-[100] px-6" onClick={onVazgec}>
       <div
         role="alertdialog"
         aria-modal="true"
@@ -67,6 +70,7 @@ export default function OnayModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
