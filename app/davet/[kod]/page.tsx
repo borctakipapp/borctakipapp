@@ -6,10 +6,13 @@ import Monogram from '@/components/Monogram'
 
 export default async function DavetPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ kod: string }>
+  searchParams: Promise<{ hata?: string }>
 }) {
   const { kod } = await params
+  const { hata } = await searchParams
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -52,9 +55,13 @@ export default async function DavetPage({
     // hiç üye olmamışsa yeni kayıt oluşturuyoruz.
     const { data: eskiKayit } = await supabase.from('grup_uyeler').select('id').eq('grup_id', grup!.id).eq('user_id', user.id).maybeSingle()
     if (eskiKayit) {
-      await supabase.from('grup_uyeler').update({ aktif: true }).eq('id', eskiKayit.id)
+      const { error: guncelleHata } = await supabase.from('grup_uyeler').update({ aktif: true }).eq('id', eskiKayit.id)
+      if (guncelleHata) {
+        redirect(`/davet/${kod}?hata=${encodeURIComponent(guncelleHata.message)}`)
+      }
       redirect(`/dashboard/gruplar/${grup!.id}`)
     }
+
     const { data: profil } = await supabase.from('profiles').select('full_name').eq('id', user.id).single()
     const gorunenAd = profil?.full_name?.trim() || user.email
 
@@ -65,8 +72,8 @@ export default async function DavetPage({
     })
 
     if (error) {
-      // Zaten üye olabilir ya da geçici bir sorun olabilir — güvenli tarafta kalıp gruplar listesine yönlendiriyoruz
-      redirect('/dashboard/gruplar')
+      // Artık gerçek hatayı görebiliyoruz — sessizce yönlendirmek yerine gösteriyoruz
+      redirect(`/davet/${kod}?hata=${encodeURIComponent(error.message)}`)
     }
 
     redirect(`/dashboard/gruplar/${grup!.id}`)
@@ -80,6 +87,13 @@ export default async function DavetPage({
         </div>
         <p className="text-xs text-muted mb-1">Bir gruba davet edildin</p>
         <h1 className="text-xl font-medium text-navy mb-6">{grup.ad}</h1>
+
+        {hata && (
+          <div className="bg-brick-soft border border-brick rounded-lg p-3 mb-4 text-left">
+            <p className="text-xs text-brick font-medium mb-0.5">Katılırken bir sorun oluştu:</p>
+            <p className="text-[11px] text-brick font-mono break-words">{hata}</p>
+          </div>
+        )}
 
         <form action={katil}>
           <button

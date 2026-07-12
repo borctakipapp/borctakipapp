@@ -26,49 +26,49 @@ export default async function OzetPage() {
   const bitisAy = ay === 11 ? 0 : ay + 1
   const bitisStr = `${bitisYil}-${ikiBasamakOz(bitisAy + 1)}-01`
 
-  const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', userId).single()
+  // Bu ay + önceki 6 ay — tüm aylık kırılımlar (bu ay, önceki ay, streak, trend grafiği)
+  // TEK bir geniş sorgudan hafızada türetilecek; sıralı (bir bekleyip diğerini atan) sorgu YOK.
+  const yediAyOncekiTarih = new Date(yil, ay - 6, 1)
+  const yediAyBaslangicStr = `${yediAyOncekiTarih.getFullYear()}-${ikiBasamakOz(yediAyOncekiTarih.getMonth() + 1)}-01`
+
+  // Birbirinden bağımsız sorguları PARALEL çalıştırıyoruz (Promise.all) — sırayla değil.
+  const [
+    { data: profile },
+    { data: debts },
+    { data: hedefler },
+    { data: genisTx },
+    { data: kapanmisBorclar },
+    { data: benimGruplarim },
+  ] = await Promise.all([
+    supabase.from('profiles').select('full_name').eq('id', userId).single(),
+    supabase.from('debts').select('*').eq('user_id', userId).eq('status', 'active').order('due_date', { ascending: true }),
+    supabase.from('savings_goals').select('id, goal_name, current_amount, target_amount').eq('user_id', userId).order('created_at', { ascending: true }),
+    supabase.from('transactions').select('type, category, amount, transaction_date').eq('user_id', userId).gte('transaction_date', yediAyBaslangicStr).lt('transaction_date', bitisStr),
+    supabase.from('debts').select('id').eq('user_id', userId).eq('status', 'paid').limit(1),
+    supabase.from('gruplar').select('id').eq('olusturan_id', userId).limit(1),
+  ])
+
   const ilkIsim = profile?.full_name ? profile.full_name.split(' ')[0] : null
-
-  // Borçlar
-  const { data: debts } = await supabase
-    .from('debts')
-    .select('*')
-    .eq('user_id', userId)
-    .eq('status', 'active')
-    .order('due_date', { ascending: true })
-
   const toplamBorc = (debts || []).reduce((sum, d) => sum + Number(d.remaining_amount), 0)
   const debtIds = (debts || []).map((d) => d.id)
 
-  const { data: hedefler } = await supabase
-    .from('savings_goals')
-    .select('id, goal_name, current_amount, target_amount')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: true })
+  // Ödemeler de aynı 7 aylık pencerede TEK sorgu (debtIds'e bağımlı olduğu için Promise.all'a alamadık ama tek sorgu)
+  const { data: genisPayments } = debtIds.length > 0
+    ? await supabase.from('payments').select('amount, paid_at').in('debt_id', debtIds).gte('paid_at', `${yediAyBaslangicStr}T00:00:00`)
+    : { data: [] as { amount: number; paid_at: string }[] }
 
   const toplamBirikim = (hedefler || []).reduce((s, h) => s + Number(h.current_amount), 0)
   const netDurumGenel = toplamBirikim - toplamBorc
   const aktifHedef = (hedefler || []).find((h) => Number(h.current_amount) < Number(h.target_amount))
   const aktifHedefOrani = aktifHedef ? Math.min(100, (Number(aktifHedef.current_amount) / Number(aktifHedef.target_amount)) * 100) : 0
 
-  // Borç kapanma tahmini (son 6 ay)
-  const altiAyOnce = new Date()
-  altiAyOnce.setMonth(altiAyOnce.getMonth() - 6)
+  // Borç kapanma tahmini (son 6 ay ödemesi — genisPayments'tan türetiliyor)
   let tahminiAy: number | null = null
-
-  if (debtIds.length > 0 && toplamBorc > 0) {
-    const { data: sonAltiAyOdemeler } = await supabase
-      .from('payments')
-      .select('amount, paid_at')
-      .in('debt_id', debtIds)
-      .gte('paid_at', altiAyOnce.toISOString())
-
-    if (sonAltiAyOdemeler && sonAltiAyOdemeler.length > 0) {
-      const toplamOdeme = sonAltiAyOdemeler.reduce((s, p) => s + Number(p.amount), 0)
-      const aylarSet = new Set(sonAltiAyOdemeler.map((p) => p.paid_at.slice(0, 7)))
-      const ortalamaAylikOdeme = toplamOdeme / aylarSet.size
-      if (ortalamaAylikOdeme > 0) tahminiAy = Math.ceil(toplamBorc / ortalamaAylikOdeme)
-    }
+  if (debtIds.length > 0 && toplamBorc > 0 && genisPayments && genisPayments.length > 0) {
+    const toplamOdeme = genisPayments.reduce((s, p) => s + Number(p.amount), 0)
+    const aylarSet = new Set(genisPayments.map((p) => p.paid_at.slice(0, 7)))
+    const ortalamaAylikOdeme = toplamOdeme / Math.max(1, aylarSet.size)
+    if (ortalamaAylikOdeme > 0) tahminiAy = Math.ceil(toplamBorc / ortalamaAylikOdeme)
   }
 
   // Yaklaşan ödemeler (en yakın 4 tanesi)
@@ -85,142 +85,78 @@ export default async function OzetPage() {
     .slice(0, 4)
   const enYakinOdeme = yaklasanlar[0]
 
-  // Tüm borçlar için gecikme durumu (Finansal Sağlık Skoru için — sadece ilk 4'e değil, hepsine bakıyoruz)
-  const tumGunFarklari = (debts || [])
+  const gecikenSayisi = (debts || [])
     .filter((d) => d.due_date)
     .map((d) => {
       const [y, m, g] = d.due_date.split('-').map(Number)
       const t = new Date(y, m - 1, g)
       return Math.round((t.getTime() - bugunTarih.getTime()) / 86400000)
     })
-  const gecikenSayisi = tumGunFarklari.filter((g) => g < 0).length
+    .filter((g) => g < 0).length
 
-  // Yapısal aylık borç yükü (taksitli borçların güncel taksit tutarları toplamı — o ay ödenmiş olsun olmasın)
   const aylikBorcYuku = (debts || []).reduce((s, d) => {
-    if (d.installment_total && d.installment_remaining) {
-      return s + (Number(d.remaining_amount) / d.installment_remaining)
-    }
+    if (d.installment_total && d.installment_remaining) return s + (Number(d.remaining_amount) / d.installment_remaining)
     return s
   }, 0)
 
-  // En yüksek faizli borç (önceliklendirme önerisi için)
   const enYuksekFaizliBorc = (debts || [])
     .filter((d) => d.interest_rate && Number(d.interest_rate) > 0)
     .sort((a, b) => Number(b.interest_rate) - Number(a.interest_rate))[0]
 
-  // Bu ayki gelir-gider
-  const { data: buAyTx } = await supabase
-    .from('transactions')
-    .select('type, category, amount')
-    .eq('user_id', userId)
-    .gte('transaction_date', baslangicStr)
-    .lt('transaction_date', bitisStr)
-
-  // "Birikimden Çekim" gerçek bir gelir değil — Gelir-Gider sayfasındaki mantıkla tutarlı olsun diye burada da netliyoruz.
-  const birikimdenCekimToplamiOz = (buAyTx || []).filter((t) => t.type === 'income' && t.category === 'Birikimden Çekim').reduce((s, t) => s + Number(t.amount), 0)
-  const buAyGelir = (buAyTx || []).filter((t) => t.type === 'income' && t.category !== 'Birikimden Çekim').reduce((s, t) => s + Number(t.amount), 0)
-  const buAyManuelGider = (buAyTx || []).filter((t) => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0) - birikimdenCekimToplamiOz
-
-  let buAyBorcOdemesi = 0
-  if (debtIds.length > 0) {
-    const { data: buAyOdemeler } = await supabase
-      .from('payments')
-      .select('amount')
-      .in('debt_id', debtIds)
-      .gte('paid_at', `${baslangicStr}T00:00:00`)
-      .lt('paid_at', `${bitisStr}T00:00:00`)
-    buAyBorcOdemesi = (buAyOdemeler || []).reduce((s, p) => s + Number(p.amount), 0)
+  // --- Aylık kırılım yardımcı fonksiyonu — hafızada, sorgu ATMADAN hesaplıyor ---
+  function ayAraligi(hedefAyOffset: number) {
+    const tarih = new Date(yil, ay - hedefAyOffset, 1)
+    const y = tarih.getFullYear(); const m = tarih.getMonth()
+    const bas = `${y}-${ikiBasamakOz(m + 1)}-01`
+    const bitYil = m === 11 ? y + 1 : y; const bitAy = m === 11 ? 0 : m + 1
+    const bit = `${bitYil}-${ikiBasamakOz(bitAy + 1)}-01`
+    return { bas, bit, ayIndex: m }
   }
 
+  function ayKirilimi(hedefAyOffset: number) {
+    const { bas, bit } = ayAraligi(hedefAyOffset)
+    const txBu = (genisTx || []).filter((t) => t.transaction_date >= bas && t.transaction_date < bit)
+    const gelir = txBu.filter((t) => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0)
+    const gider = txBu.filter((t) => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0)
+    const payBu = (genisPayments || []).filter((p) => p.paid_at >= `${bas}T00:00:00` && p.paid_at < `${bit}T00:00:00`)
+    const borcOdeme = payBu.reduce((s, p) => s + Number(p.amount), 0)
+    const veriVar = txBu.length > 0 || borcOdeme > 0
+    return { gelir, gider, borcOdeme, net: gelir - gider - borcOdeme, veriVar, tx: txBu }
+  }
+
+  // Bu ayki gelir-gider
+  const buAyKirilim = ayKirilimi(0)
+  const birikimdenCekimToplamiOz = buAyKirilim.tx.filter((t) => t.type === 'income' && t.category === 'Birikimden Çekim').reduce((s, t) => s + Number(t.amount), 0)
+  const buAyGelir = buAyKirilim.gelir - birikimdenCekimToplamiOz
+  const buAyManuelGider = buAyKirilim.gider - birikimdenCekimToplamiOz
+  const buAyBorcOdemesi = buAyKirilim.borcOdeme
   const buAyNet = buAyGelir - buAyManuelGider - buAyBorcOdemesi
 
-  // Geçen aya göre trend (basitleştirilmiş, birikim netlemesi olmadan — sadece yön göstergesi)
-  const oncekiAyTarih = new Date(yil, ay - 1, 1)
-  const oncekiYil = oncekiAyTarih.getFullYear()
-  const oncekiAy = oncekiAyTarih.getMonth()
-  const oncekiBaslangicStr = `${oncekiYil}-${ikiBasamakOz(oncekiAy + 1)}-01`
+  // Geçen ay
+  const oncekiKirilim = ayKirilimi(1)
+  const oncekiAyNet = oncekiKirilim.net
+  const oncekiVeriVar = oncekiKirilim.veriVar
 
-  const { data: oncekiAyTx } = await supabase
-    .from('transactions')
-    .select('type, amount')
-    .eq('user_id', userId)
-    .gte('transaction_date', oncekiBaslangicStr)
-    .lt('transaction_date', baslangicStr)
-
-  const oncekiGelir = (oncekiAyTx || []).filter((t) => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0)
-  const oncekiGider = (oncekiAyTx || []).filter((t) => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0)
-
-  let oncekiBorcOdemesi = 0
-  if (debtIds.length > 0) {
-    const { data: oncekiOdemeler } = await supabase
-      .from('payments')
-      .select('amount')
-      .in('debt_id', debtIds)
-      .gte('paid_at', `${oncekiBaslangicStr}T00:00:00`)
-      .lt('paid_at', `${baslangicStr}T00:00:00`)
-    oncekiBorcOdemesi = (oncekiOdemeler || []).reduce((s, p) => s + Number(p.amount), 0)
-  }
-
-  const oncekiAyNet = oncekiGelir - oncekiGider - oncekiBorcOdemesi
-  const oncekiVeriVar = (oncekiAyTx && oncekiAyTx.length > 0) || oncekiBorcOdemesi > 0
-
-  // Rozetler (küçük başarılar) — mevcut veriden hesaplanıyor, ayrı bir tablo gerekmiyor
-  const { data: kapanmisBorclar } = await supabase.from('debts').select('id').eq('user_id', userId).eq('status', 'paid').limit(1)
   const ilkBorcKapandi = (kapanmisBorclar || []).length > 0
-
   const ilkHedefTamamlandi = (hedefler || []).some((h) => Number(h.current_amount) >= Number(h.target_amount) && Number(h.target_amount) > 0)
-
-  const { data: benimGruplarim } = await supabase.from('gruplar').select('id').eq('olusturan_id', userId).limit(1)
   const ilkGrupKuruldu = (benimGruplarim || []).length > 0
 
-  // Streak: son 3 ay üst üste net pozitif miydi (basitleştirilmiş, gerçek zamanında ödeme takibi değil — elimizdeki veriyle en dürüst hesaplama bu)
-  async function ayNetiHesapla(hedefAyOffset: number) {
-    const tarih = new Date(yil, ay - hedefAyOffset, 1)
-    const y = tarih.getFullYear()
-    const m = tarih.getMonth()
-    const bas = `${y}-${ikiBasamakOz(m + 1)}-01`
-    const bitYil = m === 11 ? y + 1 : y
-    const bitAy = m === 11 ? 0 : m + 1
-    const bit = `${bitYil}-${ikiBasamakOz(bitAy + 1)}-01`
-
-    const { data: tx } = await supabase.from('transactions').select('type, amount').eq('user_id', userId).gte('transaction_date', bas).lt('transaction_date', bit)
-    const gelir = (tx || []).filter((t) => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0)
-    const gider = (tx || []).filter((t) => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0)
-
-    let borcOdeme = 0
-    if (debtIds.length > 0) {
-      const { data: pay } = await supabase.from('payments').select('amount').in('debt_id', debtIds).gte('paid_at', `${bas}T00:00:00`).lt('paid_at', `${bit}T00:00:00`)
-      borcOdeme = (pay || []).reduce((s, p) => s + Number(p.amount), 0)
-    }
-    const veriVar = (tx && tx.length > 0) || borcOdeme > 0
-    return { net: gelir - gider - borcOdeme, veriVar }
-  }
-
+  // Streak — artık sorgu atmıyor, sadece hafızadaki genisTx/genisPayments'ı tarıyor
   let streakAySayisi = 0
   for (let i = 0; i < 6; i++) {
-    const { net, veriVar } = await ayNetiHesapla(i)
+    const { net, veriVar } = ayKirilimi(i)
     if (!veriVar) break
     if (net >= 0) streakAySayisi++
     else break
   }
 
-  // Son 6 ay ödeme trendi (grafik için) — tek sorguda, N+1 sorgu yapmadan
+  // Son 6 ay ödeme trendi (grafik için) — yine hafızadan
   const AY_KISALTMALARI = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara']
   const odemeTrendi: { etiket: string; tutar: number }[] = []
   if (debtIds.length > 0) {
-    const altiAyOncekiTarih = new Date(yil, ay - 5, 1)
-    const altiAyBaslangicStr = `${altiAyOncekiTarih.getFullYear()}-${ikiBasamakOz(altiAyOncekiTarih.getMonth() + 1)}-01T00:00:00`
-
-    const { data: sonAltiAyOdemeVerisi } = await supabase
-      .from('payments').select('amount, paid_at').in('debt_id', debtIds).gte('paid_at', altiAyBaslangicStr)
-
     for (let i = 5; i >= 0; i--) {
-      const tarih = new Date(yil, ay - i, 1)
-      const ayAnahtari = `${tarih.getFullYear()}-${ikiBasamakOz(tarih.getMonth() + 1)}`
-      const toplam = (sonAltiAyOdemeVerisi || [])
-        .filter((p) => p.paid_at.slice(0, 7) === ayAnahtari)
-        .reduce((s, p) => s + Number(p.amount), 0)
-      odemeTrendi.push({ etiket: AY_KISALTMALARI[tarih.getMonth()], tutar: toplam })
+      const { ayIndex } = ayAraligi(i)
+      odemeTrendi.push({ etiket: AY_KISALTMALARI[ayIndex], tutar: ayKirilimi(i).borcOdeme })
     }
   }
 
@@ -276,9 +212,9 @@ export default async function OzetPage() {
       ? { etiket: 'Orta', badge: 'bg-amber-soft text-amber', metin: 'text-amber', cubuk: 'bg-amber' }
       : { etiket: 'Gelişim Alanı', badge: 'bg-brick-soft text-brick', metin: 'text-brick', cubuk: 'bg-brick' }
 
-  // Gider dağılımı (mini)
+  // Gider dağılımı (mini) — bu ayki kırılımdan
   const giderMap: Record<string, number> = {}
-  ;(buAyTx || []).filter((t) => t.type === 'expense').forEach((t) => {
+  buAyKirilim.tx.filter((t) => t.type === 'expense').forEach((t) => {
     giderMap[t.category] = (giderMap[t.category] || 0) + Number(t.amount)
   })
   if (birikimdenCekimToplamiOz > 0 && giderMap['Birikim Aktarımı']) {
