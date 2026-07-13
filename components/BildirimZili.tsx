@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import Monogram from '@/components/Monogram'
 import BorcDetayModal from '@/components/BorcDetayModal'
 import DuzenliIslemlerModal from '@/components/DuzenliIslemlerModal'
+import { gunKaldiHesapla, ikiBasamak } from '@/lib/finans-motoru'
 
 type Bildirim = {
   tur: 'borc' | 'duzenli'
@@ -63,12 +64,10 @@ export default function BildirimZili() {
       .not('due_date', 'is', null)
 
     const borcListesi: Bildirim[] = (debts || [])
-      .map((d) => {
-        const [y, m, gun] = d.due_date.split('-').map(Number)
-        const tarih = new Date(y, m - 1, gun)
-        const gunKaldi = Math.round((tarih.getTime() - bugun.getTime()) / 86400000)
-        return { tur: 'borc' as const, id: d.id, baslik: d.institution_name, altBaslik: '', tutar: Number(d.remaining_amount), gunKaldi }
-      })
+      .map((d) => ({
+        tur: 'borc' as const, id: d.id, baslik: d.institution_name, altBaslik: '',
+        tutar: Number(d.remaining_amount), gunKaldi: gunKaldiHesapla(d.due_date, bugun),
+      }))
       .filter((d) => d.gunKaldi <= 5)
 
     // Düzenli işlemler (faturalar/giderler) — yaklaşan tekrar tarihini kendimiz hesaplıyoruz
@@ -82,7 +81,8 @@ export default function BildirimZili() {
     const duzenliListesi: Bildirim[] = (duzenliler || [])
       .map((r) => {
         const tarih = sonrakiTarihHesapla(r.day_of_month)
-        const gunKaldi = Math.round((tarih.getTime() - bugun.getTime()) / 86400000)
+        const tarihStr = `${tarih.getFullYear()}-${ikiBasamak(tarih.getMonth() + 1)}-${ikiBasamak(tarih.getDate())}`
+        const gunKaldi = gunKaldiHesapla(tarihStr, bugun)
         return { tur: 'duzenli' as const, id: r.id, baslik: r.category, altBaslik: r.description || '', tutar: Number(r.amount), gunKaldi }
       })
       .filter((d) => d.gunKaldi <= 5)

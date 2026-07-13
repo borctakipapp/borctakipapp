@@ -16,7 +16,7 @@ type GiderKalemi = { kategori: string; tutar: number; renk: string }
 export default function OzetSekmeler({
   enYuksekFaizliBorc, enYakinOdeme, buAyNet, borcGelirOrani, oncekiVeriVar, oncekiAyNet,
   streakAySayisi, aktifHedef, aktifHedefOrani, odemeTrendi, rozetler,
-  toplamBirikim, netDurumGenel, yaklasanlar, giderListesi, enBuyukGider,
+  toplamBirikim, netDurumGenel, yaklasanlar, giderListesi, enBuyukGider, toplamBekleyenAlacak,
 }: {
   enYuksekFaizliBorc: Borc | undefined
   enYakinOdeme: YakinOdeme | undefined
@@ -34,6 +34,7 @@ export default function OzetSekmeler({
   yaklasanlar: YakinOdeme[]
   giderListesi: GiderKalemi[]
   enBuyukGider: number
+  toplamBekleyenAlacak: number
 }) {
   const [sekme, setSekme] = useState<'bugun' | 'grafikler' | 'detaylar'>('bugun')
 
@@ -198,6 +199,19 @@ export default function OzetSekmeler({
               <p className={`font-mono text-lg font-medium ${netDurumGenel >= 0 ? 'text-navy' : 'text-brick'}`}>{netDurumGenel.toLocaleString('tr-TR')} ₺</p>
             </div>
           </div>
+
+          {/* Bilgi amaçlı — Net Varlık/Net Servet hesabına DAHİL DEĞİL (FAZ 0.5 kararı) */}
+          {toplamBekleyenAlacak > 0 && (
+            <Link href="/dashboard/alacaklar" className="block bg-white rounded-lg p-4 border border-border hover:shadow-sm transition-shadow mb-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-muted mb-1">Bekleyen Alacaklar</p>
+                  <p className="text-[11px] text-muted">Sana borçlu olanlar — net varlığa dahil değil</p>
+                </div>
+                <p className="font-mono text-lg text-amber font-medium">{toplamBekleyenAlacak.toLocaleString('tr-TR')} ₺</p>
+              </div>
+            </Link>
+          )}
 
           <h2 className="text-sm font-medium text-muted mb-3">
             Yaklaşan Ödemeler {yaklasanlar.length > 0 && <span className="text-muted/60">({yaklasanlar.length})</span>}

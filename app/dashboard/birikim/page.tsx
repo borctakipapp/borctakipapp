@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import Monogram from '@/components/Monogram'
 import BirikimEkleModal from '@/components/BirikimEkleModal'
 import BirikimHedefModal from '@/components/BirikimHedefModal'
+import { toplamBirikimHesapla } from '@/lib/finans-motoru'
 
 export default async function BirikimPage() {
   const supabase = await createClient()
@@ -15,7 +16,7 @@ export default async function BirikimPage() {
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
 
-  const toplamBiriken = (hedefler || []).reduce((s, h) => s + Number(h.current_amount), 0)
+  const toplamBiriken = toplamBirikimHesapla(hedefler || [])
 
   return (
     <main className="max-w-2xl mx-auto px-6 py-10 pb-24 md:pb-10">

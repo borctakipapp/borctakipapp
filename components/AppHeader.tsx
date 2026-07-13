@@ -7,6 +7,9 @@ export const SEKMELER = [
   { key: 'gelir-gider', href: '/dashboard/gelir-gider', etiket: 'Gelir-Gider', ikon: '📊' },
   { key: 'birikim', href: '/dashboard/birikim', etiket: 'Birikim', ikon: '🎯' },
   { key: 'gruplar', href: '/dashboard/gruplar', etiket: 'Ortak Hesap', ikon: '👥' },
+  // masaustuSadece: true → mobil alt navigasyonda GÖSTERİLMEZ (bilinçli karar — 6.
+  // sekme mobilde sıkışık olurdu), sadece masaüstü kenar çubuğunda görünür.
+  { key: 'alacaklar', href: '/dashboard/alacaklar', etiket: 'Alacaklar', ikon: '🤝', masaustuSadece: true },
 ] as const
 
 export type SekmeKey = typeof SEKMELER[number]['key']

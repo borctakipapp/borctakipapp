@@ -9,22 +9,19 @@ import Modal from './Modal'
 import Monogram from './Monogram'
 import { useToast } from './Toast'
 import { hataMesajiCevir } from '@/lib/hata-mesaji'
+import { amortismanSimuleEt } from '@/lib/finans-motoru'
 import Skeleton from './Skeleton'
+import { BORC_KATEGORILERI } from '@/lib/borc-kategorileri'
 
-const KATEGORILER = [
-  { value: 'kredi_karti', label: 'Kredi Kartı' }, { value: 'ihtiyac_kredisi', label: 'İhtiyaç Kredisi' },
-  { value: 'konut_kredisi', label: 'Konut Kredisi' }, { value: 'tasit_kredisi', label: 'Taşıt Kredisi' },
-  { value: 'kisisel', label: 'Kişisel Borç' }, { value: 'taksitli_alisveris', label: 'Taksitli Alışveriş' },
-  { value: 'diger', label: 'Diğer' },
-]
-const KATEGORI_ALANLAR: Record<string, { taksit: boolean; faiz: boolean; kurumEtiket: string }> = {
-  kredi_karti: { taksit: false, faiz: true, kurumEtiket: 'Banka / Kart Adı' },
-  ihtiyac_kredisi: { taksit: true, faiz: true, kurumEtiket: 'Banka Adı' },
-  konut_kredisi: { taksit: true, faiz: true, kurumEtiket: 'Banka Adı' },
-  tasit_kredisi: { taksit: true, faiz: true, kurumEtiket: 'Banka Adı' },
-  kisisel: { taksit: true, faiz: false, kurumEtiket: 'Kimden / Kime' },
-  taksitli_alisveris: { taksit: true, faiz: false, kurumEtiket: 'Mağaza Adı' },
-  diger: { taksit: true, faiz: true, kurumEtiket: 'Kurum / Kişi Adı' },
+const KATEGORI_ALANLAR: Record<string, { taksit: boolean; faiz: boolean; kmh: boolean; kurumEtiket: string }> = {
+  kredi_karti: { taksit: false, faiz: true, kmh: false, kurumEtiket: 'Banka / Kart Adı' },
+  kmh: { taksit: false, faiz: true, kmh: true, kurumEtiket: 'Banka Adı' },
+  ihtiyac_kredisi: { taksit: true, faiz: true, kmh: false, kurumEtiket: 'Banka Adı' },
+  konut_kredisi: { taksit: true, faiz: true, kmh: false, kurumEtiket: 'Banka Adı' },
+  tasit_kredisi: { taksit: true, faiz: true, kmh: false, kurumEtiket: 'Banka Adı' },
+  kisisel: { taksit: true, faiz: false, kmh: false, kurumEtiket: 'Kimden / Kime' },
+  taksitli_alisveris: { taksit: true, faiz: false, kmh: false, kurumEtiket: 'Mağaza Adı' },
+  diger: { taksit: true, faiz: true, kmh: false, kurumEtiket: 'Kurum / Kişi Adı' },
 }
 
 function ikiBasamak(n: number) { return String(n).padStart(2, '0') }
@@ -63,6 +60,8 @@ export default function BorcDetayModal({ debtId, tetikleyici, onBasarili }: { de
   const [installmentRemaining, setInstallmentRemaining] = useState('')
   const [interestRate, setInterestRate] = useState('')
   const [principalAmount, setPrincipalAmount] = useState('')
+  const [aylikTaksitTutari, setAylikTaksitTutari] = useState('')
+  const [kmhLimit, setKmhLimit] = useState('')
   const [dueDate, setDueDate] = useState('')
   const [status, setStatus] = useState('active')
   const [prepaymentStrategy, setPrepaymentStrategy] = useState<'vade_kisalsin' | 'taksit_dussun'>('vade_kisalsin')
@@ -91,6 +90,8 @@ export default function BorcDetayModal({ debtId, tetikleyici, onBasarili }: { de
       setInstallmentRemaining(debt.installment_remaining ? String(debt.installment_remaining) : '')
       setInterestRate(debt.interest_rate ? String(debt.interest_rate) : '')
       setPrincipalAmount(debt.principal_amount ? String(debt.principal_amount) : '')
+      setAylikTaksitTutari(debt.aylik_taksit_tutari ? String(debt.aylik_taksit_tutari) : '')
+      setKmhLimit(debt.kmh_limit ? String(debt.kmh_limit) : '')
       setDueDate(debt.due_date || ''); setStatus(debt.status)
       setPrepaymentStrategy(debt.prepayment_strategy === 'taksit_dussun' ? 'taksit_dussun' : 'vade_kisalsin')
     }
@@ -103,7 +104,7 @@ export default function BorcDetayModal({ debtId, tetikleyici, onBasarili }: { de
 
   useEffect(() => { if (acik) fetchData() }, [acik, fetchData])
 
-  const alanlar = KATEGORI_ALANLAR[category] || { taksit: false, faiz: false, kurumEtiket: 'Kurum / Kişi Adı' }
+  const alanlar = KATEGORI_ALANLAR[category] || { taksit: false, faiz: false, kmh: false, kurumEtiket: 'Kurum / Kişi Adı' }
   const orijinalTaksitTutari = installmentTotal && totalAmount ? parseFloat(totalAmount) / parseInt(installmentTotal) : 0
   const taksitVarMi = alanlar.taksit && !!installmentTotal && orijinalTaksitTutari > 0
   const tamamlananTaksitSayisi = taksitVarMi ? (parseInt(installmentTotal) - parseInt(installmentRemaining || '0')) : 0
@@ -182,7 +183,18 @@ export default function BorcDetayModal({ debtId, tetikleyici, onBasarili }: { de
 
   async function gercekTamaminiOde() {
     setOnayTamamAcik(false); setProcessing(true)
-    const { error } = await supabase.from('debts').update({ status: 'paid', remaining_amount: 0 }).eq('id', debtId)
+    // ÖNEMLİ: doğrudan debts.update() yapmıyoruz — bu, payments tablosuna hiç kayıt bırakmadığı için
+    // "Son 6 Ay Ödeme Trendi", streak ve diğer geçmişe dayalı hesaplamaların bu ödemeyi hiç görmemesine
+    // yol açıyordu. Normal taksit ödemeleriyle AYNI atomik RPC'yi kullanıyoruz.
+    const kalanTutar = parseFloat(remainingAmount)
+    const { error } = await supabase.rpc('odeme_kaydet', {
+      p_debt_id: debtId,
+      p_amount: kalanTutar,
+      p_yeni_kalan_tutar: 0,
+      p_yeni_taksit_kalan: taksitVarMi ? 0 : null,
+      p_yeni_due_date: null,
+      p_yeni_status: 'paid',
+    })
     setProcessing(false)
     if (error) setMessage(hataMesajiCevir(error))
     else { goster('Borç ödendi olarak işaretlendi.'); setAcik(false); (onBasarili ? onBasarili() : router.refresh()) }
@@ -227,12 +239,16 @@ export default function BorcDetayModal({ debtId, tetikleyici, onBasarili }: { de
 
   async function handleUpdate(e: React.FormEvent) {
     e.preventDefault(); setSaving(true); setMessage('')
+    // KMH'de "Toplam Tutar" kavramı yok — güncel bakiyeyle aynı kabul ediyoruz (limit ayrı saklanıyor)
+    const kesinToplamTutar = alanlar.kmh ? parseFloat(remainingAmount) : parseFloat(totalAmount)
     const { error } = await supabase.from('debts').update({
-      category, institution_name: institutionName, total_amount: parseFloat(totalAmount), remaining_amount: parseFloat(remainingAmount),
+      category, institution_name: institutionName, total_amount: kesinToplamTutar, remaining_amount: parseFloat(remainingAmount),
       installment_total: alanlar.taksit && installmentTotal ? parseInt(installmentTotal) : null,
       installment_remaining: alanlar.taksit && installmentRemaining ? parseInt(installmentRemaining) : null,
       interest_rate: alanlar.faiz && interestRate ? parseFloat(interestRate) : null,
       principal_amount: principalAmount ? parseFloat(principalAmount) : null,
+      aylik_taksit_tutari: aylikTaksitTutari ? parseFloat(aylikTaksitTutari) : null,
+      kmh_limit: alanlar.kmh && kmhLimit ? parseFloat(kmhLimit) : null,
       due_date: dueDate || null, prepayment_strategy: prepaymentStrategy,
     }).eq('id', debtId)
     if (error) { setMessage(hataMesajiCevir(error)); setSaving(false) }
@@ -347,24 +363,62 @@ export default function BorcDetayModal({ debtId, tetikleyici, onBasarili }: { de
               const nOrijinal = parseInt(installmentTotal)
               const kalanTaksitSayisi = parseInt(installmentRemaining)
               const tamamlanan = tamamlananTaksitSayisi
-              const kalanAnapara = P * (1 - tamamlanan / nOrijinal)
-              const kalanTaksitlerToplami = orijinalTaksitTutari * kalanTaksitSayisi
-              const kalanFaiz = Math.max(0, kalanTaksitlerToplami - kalanAnapara)
-              const anaparaPayi = P / nOrijinal
-              const simYeniAySayisi = Math.ceil(kalanAnapara / (anaparaPayi + ekstraOdeme))
-              const simKazanilanAy = Math.max(0, kalanTaksitSayisi - Math.min(simYeniAySayisi, kalanTaksitSayisi))
-              const simTasarrufFaiz = simKazanilanAy * (orijinalTaksitTutari - anaparaPayi)
+              const kalanAnaparaBasit = P * (1 - tamamlanan / nOrijinal) // aylikTaksitTutari yoksa yaklaşık kalan anapara
+
+              // FİNANS MOTORU: aylik_taksit_tutari girilmişse GERÇEK amortisman (bankayla eşleşen),
+              // girilmemişse (eski kayıtlar) eskisi gibi yaklaşık hesap — çalışan özelliği bozmuyoruz.
+              const gercekVeriVar = !!aylikTaksitTutari && parseFloat(aylikTaksitTutari) > 0
+              const aylikFaizOrani = parseFloat(interestRate) / 100
+
+              let kalanAnapara: number
+              let kalanFaiz: number
+              let anaparaPayi: number
+              let simKazanilanAy: number
+              let simTasarrufFaiz: number
+              let taksitTutariGosterim: number
+
+              if (gercekVeriVar) {
+                const taksitTutari = parseFloat(aylikTaksitTutari)
+                taksitTutariGosterim = taksitTutari
+                kalanAnapara = kalanAnaparaBasit
+                const normal = amortismanSimuleEt({ kalanAnapara, aylikFaizOrani, aylikTaksitTutari: taksitTutari })
+                kalanFaiz = normal.gecersiz ? 0 : normal.kalanFaizToplami
+                anaparaPayi = taksitTutari - kalanAnapara * aylikFaizOrani // ilk ayki yaklaşık anapara payı (slider max için)
+
+                const ekstrali = amortismanSimuleEt({ kalanAnapara, aylikFaizOrani, aylikTaksitTutari: taksitTutari, ekstraOdeme: ekstraOdeme })
+                if (!normal.gecersiz && !ekstrali.gecersiz) {
+                  simKazanilanAy = Math.max(0, normal.aySayisi - ekstrali.aySayisi)
+                  simTasarrufFaiz = Math.max(0, normal.kalanFaizToplami - ekstrali.kalanFaizToplami)
+                } else {
+                  simKazanilanAy = 0; simTasarrufFaiz = 0
+                }
+              } else {
+                // Eski (yaklaşık) yöntem — aylik_taksit_tutari henüz girilmemiş borçlar için
+                kalanAnapara = kalanAnaparaBasit
+                const kalanTaksitlerToplami = orijinalTaksitTutari * kalanTaksitSayisi
+                kalanFaiz = Math.max(0, kalanTaksitlerToplami - kalanAnapara)
+                anaparaPayi = P / nOrijinal
+                taksitTutariGosterim = orijinalTaksitTutari
+                const simYeniAySayisi = Math.ceil(kalanAnapara / (anaparaPayi + ekstraOdeme))
+                simKazanilanAy = Math.max(0, kalanTaksitSayisi - Math.min(simYeniAySayisi, kalanTaksitSayisi))
+                simTasarrufFaiz = simKazanilanAy * (orijinalTaksitTutari - anaparaPayi)
+              }
 
               return (
                 <details className="mb-4 bg-amber-soft rounded-lg p-4 border border-amber/30">
                   <summary className="text-sm font-medium text-navy cursor-pointer">Erken Kapama Analizi</summary>
+                  {!gercekVeriVar && (
+                    <p className="text-[11px] text-muted mt-2">
+                      Bu, yaklaşık bir hesap. "Aylık Taksit Tutarı"nı düzenle bölümünden girersen banka hesabınla birebir eşleşen kesin rakamları görürsün.
+                    </p>
+                  )}
                   <div className="flex flex-col gap-2 text-sm mt-3">
                     <div className="flex justify-between"><span className="text-muted">Kalan anapara</span><span className="font-mono text-navy">{kalanAnapara.toLocaleString('tr-TR', { maximumFractionDigits: 0 })} ₺</span></div>
                     <div className="flex justify-between"><span className="font-medium text-sage">Erken kapatarak tasarrufun</span><span className="font-mono font-medium text-sage">{kalanFaiz.toLocaleString('tr-TR', { maximumFractionDigits: 0 })} ₺</span></div>
                   </div>
                   <div className="mt-4 pt-4 border-t border-amber/30">
                     <p className="text-xs font-medium text-navy mb-2">Ya her ay biraz fazla ödersem?</p>
-                    <input type="range" min={0} max={Math.round(orijinalTaksitTutari)} step={50} value={ekstraOdeme}
+                    <input type="range" min={0} max={Math.round(taksitTutariGosterim)} step={50} value={ekstraOdeme}
                       onChange={(e) => setEkstraOdeme(Number(e.target.value))} className="w-full accent-sage" />
                     <p className="text-xs text-muted mb-3">Her ay <span className="font-mono text-navy">+{ekstraOdeme.toLocaleString('tr-TR')} ₺</span> fazladan ödersen:</p>
                     <div className="bg-white rounded-lg p-3 flex flex-col gap-1.5 text-sm">
@@ -382,7 +436,7 @@ export default function BorcDetayModal({ debtId, tetikleyici, onBasarili }: { de
                 <div>
                   <label className="text-xs text-muted mb-1 block">Borç Türü</label>
                   <Secim value={category} onChange={(e) => setCategory(e.target.value)}>
-                    {KATEGORILER.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}
+                    {BORC_KATEGORILERI.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}
                   </Secim>
                 </div>
                 <div>
@@ -390,18 +444,33 @@ export default function BorcDetayModal({ debtId, tetikleyici, onBasarili }: { de
                   <input type="text" value={institutionName} onChange={(e) => setInstitutionName(e.target.value)} required
                     className="w-full px-3 py-2.5 border border-border rounded-lg text-sm bg-white" />
                 </div>
-                <div className="flex gap-3">
-                  <div className="flex-1">
-                    <label className="text-xs text-muted mb-1 block">Toplam Tutar (₺)</label>
-                    <input type="number" step="0.01" value={totalAmount} onChange={(e) => setTotalAmount(e.target.value)} required
-                      className="w-full px-3 py-2.5 border border-border rounded-lg text-sm bg-white font-mono" />
+                {alanlar.kmh ? (
+                  <div className="flex gap-3">
+                    <div className="flex-1">
+                      <label className="text-xs text-muted mb-1 block">Limit (₺)</label>
+                      <input type="number" step="0.01" value={kmhLimit} onChange={(e) => setKmhLimit(e.target.value)}
+                        className="w-full px-3 py-2.5 border border-border rounded-lg text-sm bg-white font-mono" />
+                    </div>
+                    <div className="flex-1">
+                      <label className="text-xs text-muted mb-1 block">Güncel Kullanılan Bakiye (₺)</label>
+                      <input type="number" step="0.01" value={remainingAmount} onChange={(e) => setRemainingAmount(e.target.value)} required
+                        className="w-full px-3 py-2.5 border border-border rounded-lg text-sm bg-white font-mono" />
+                    </div>
                   </div>
-                  <div className="flex-1">
-                    <label className="text-xs text-muted mb-1 block">Kalan Tutar (₺)</label>
-                    <input type="number" step="0.01" value={remainingAmount} onChange={(e) => setRemainingAmount(e.target.value)} required
-                      className="w-full px-3 py-2.5 border border-border rounded-lg text-sm bg-white font-mono" />
+                ) : (
+                  <div className="flex gap-3">
+                    <div className="flex-1">
+                      <label className="text-xs text-muted mb-1 block">Toplam Tutar (₺)</label>
+                      <input type="number" step="0.01" value={totalAmount} onChange={(e) => setTotalAmount(e.target.value)} required
+                        className="w-full px-3 py-2.5 border border-border rounded-lg text-sm bg-white font-mono" />
+                    </div>
+                    <div className="flex-1">
+                      <label className="text-xs text-muted mb-1 block">Kalan Tutar (₺)</label>
+                      <input type="number" step="0.01" value={remainingAmount} onChange={(e) => setRemainingAmount(e.target.value)} required
+                        className="w-full px-3 py-2.5 border border-border rounded-lg text-sm bg-white font-mono" />
+                    </div>
                   </div>
-                </div>
+                )}
                 {alanlar.taksit && (
                   <div className="flex gap-3">
                     <div className="flex-1">
@@ -414,6 +483,15 @@ export default function BorcDetayModal({ debtId, tetikleyici, onBasarili }: { de
                       <input type="number" value={installmentRemaining} onChange={(e) => setInstallmentRemaining(e.target.value)}
                         className="w-full px-3 py-2.5 border border-border rounded-lg text-sm bg-white font-mono" />
                     </div>
+                  </div>
+                )}
+                {alanlar.taksit && alanlar.faiz && (
+                  <div>
+                    <label className="text-xs text-muted mb-1 block">
+                      Aylık Taksit Tutarı (₺) — girersen Erken Kapama Analizi gerçek banka hesabıyla eşleşir
+                    </label>
+                    <input type="number" step="0.01" value={aylikTaksitTutari} onChange={(e) => setAylikTaksitTutari(e.target.value)}
+                      className="w-full px-3 py-2.5 border border-border rounded-lg text-sm bg-white font-mono" />
                   </div>
                 )}
                 {alanlar.taksit && (

@@ -1,31 +1,26 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Secim from './Secim'
 import Modal from './Modal'
 import { hataMesajiCevir } from '@/lib/hata-mesaji'
 import { useToast } from './Toast'
+import { BORC_KATEGORILERI } from '@/lib/borc-kategorileri'
 
-const KATEGORILER = [
-  { value: 'kredi_karti', label: 'Kredi Kartı' },
-  { value: 'ihtiyac_kredisi', label: 'İhtiyaç Kredisi' },
-  { value: 'konut_kredisi', label: 'Konut Kredisi' },
-  { value: 'tasit_kredisi', label: 'Taşıt Kredisi' },
-  { value: 'kisisel', label: 'Kişisel Borç' },
-  { value: 'taksitli_alisveris', label: 'Taksitli Alışveriş' },
-  { value: 'diger', label: 'Diğer' },
-]
-
-const KATEGORI_ALANLAR: Record<string, { taksit: boolean; faiz: boolean; tekTutar: boolean; kurumEtiket: string }> = {
-  kredi_karti: { taksit: false, faiz: true, tekTutar: false, kurumEtiket: 'Banka / Kart Adı' },
-  ihtiyac_kredisi: { taksit: true, faiz: true, tekTutar: false, kurumEtiket: 'Banka Adı' },
-  konut_kredisi: { taksit: true, faiz: true, tekTutar: false, kurumEtiket: 'Banka Adı' },
-  tasit_kredisi: { taksit: true, faiz: true, tekTutar: false, kurumEtiket: 'Banka Adı' },
-  kisisel: { taksit: true, faiz: false, tekTutar: false, kurumEtiket: 'Kimden / Kime' },
-  taksitli_alisveris: { taksit: true, faiz: false, tekTutar: false, kurumEtiket: 'Mağaza Adı' },
-  diger: { taksit: true, faiz: true, tekTutar: false, kurumEtiket: 'Kurum / Kişi Adı' },
+// FAZ B: taksitli kredilerde artık "Toplam Tutar/Toplam Taksit" gibi kullanıcının kendi
+// hesaplaması gereken alanlar YOK. Sadece bankada/ekstrede yazan, doğrudan okunabilecek
+// bilgiler isteniyor — sistem geri kalanını türetiyor.
+const KATEGORI_ALANLAR: Record<string, { taksit: boolean; faiz: boolean; tekTutar: boolean; kmh: boolean; kurumEtiket: string }> = {
+  kredi_karti: { taksit: false, faiz: true, tekTutar: false, kmh: false, kurumEtiket: 'Banka / Kart Adı' },
+  kmh: { taksit: false, faiz: true, tekTutar: false, kmh: true, kurumEtiket: 'Banka Adı' },
+  ihtiyac_kredisi: { taksit: true, faiz: true, tekTutar: false, kmh: false, kurumEtiket: 'Banka Adı' },
+  konut_kredisi: { taksit: true, faiz: true, tekTutar: false, kmh: false, kurumEtiket: 'Banka Adı' },
+  tasit_kredisi: { taksit: true, faiz: true, tekTutar: false, kmh: false, kurumEtiket: 'Banka Adı' },
+  kisisel: { taksit: true, faiz: false, tekTutar: false, kmh: false, kurumEtiket: 'Kimden / Kime' },
+  taksitli_alisveris: { taksit: true, faiz: false, tekTutar: false, kmh: false, kurumEtiket: 'Mağaza Adı' },
+  diger: { taksit: true, faiz: true, tekTutar: false, kmh: false, kurumEtiket: 'Kurum / Kişi Adı' },
 }
 
 export default function BorcEkleModal() {
@@ -33,11 +28,20 @@ export default function BorcEkleModal() {
   const [acik, setAcik] = useState(false)
   const [category, setCategory] = useState('kredi_karti')
   const [institutionName, setInstitutionName] = useState('')
+
+  // Taksitsiz (kredi kartı gibi) borçlar için
   const [totalAmount, setTotalAmount] = useState('')
   const [remainingAmount, setRemainingAmount] = useState('')
-  const [installmentTotal, setInstallmentTotal] = useState('')
-  const [installmentRemaining, setInstallmentRemaining] = useState('')
+
+  // Taksitli krediler için — YENİ, sadeleştirilmiş girişler
+  const [kalanAnapara, setKalanAnapara] = useState('')       // principal_amount
+  const [aylikTaksitTutari, setAylikTaksitTutari] = useState('') // aylik_taksit_tutari
+  const [kalanTaksitSayisi, setKalanTaksitSayisi] = useState('') // installment_remaining
+
   const [interestRate, setInterestRate] = useState('')
+  // KMH için — yıllık faiz kullanıcıdan alınır, aylık karşılığı saklanır (interest_rate her yerde "aylık" anlamına gelir)
+  const [kmhLimit, setKmhLimit] = useState('')
+  const [kmhYillikFaiz, setKmhYillikFaiz] = useState('')
   const [dueDate, setDueDate] = useState('')
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
@@ -46,39 +50,82 @@ export default function BorcEkleModal() {
   const supabase = createClient()
   const alanlar = KATEGORI_ALANLAR[category]
 
+  // Kullanıcı yazarken canlı önizleme — "işte toplam ne kadar borcun kaldığını" hemen görsün
+  const hesaplananToplam = useMemo(() => {
+    const tutar = parseFloat(aylikTaksitTutari)
+    const sayi = parseInt(kalanTaksitSayisi)
+    if (!tutar || !sayi || tutar <= 0 || sayi <= 0) return null
+    return tutar * sayi
+  }, [aylikTaksitTutari, kalanTaksitSayisi])
+
   function sifirlaVeKapat() {
     setAcik(false)
     setCategory('kredi_karti'); setInstitutionName(''); setTotalAmount(''); setRemainingAmount('')
-    setInstallmentTotal(''); setInstallmentRemaining(''); setInterestRate(''); setDueDate(''); setMessage('')
+    setKalanAnapara(''); setAylikTaksitTutari(''); setKalanTaksitSayisi('')
+    setInterestRate(''); setDueDate(''); setMessage('')
+    setKmhLimit(''); setKmhYillikFaiz('')
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    setLoading(true)
     setMessage('')
 
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      setMessage('Oturum bulunamadı, tekrar giriş yapmalısın.')
-      setLoading(false)
-      return
+    if (!user) { setMessage('Oturum bulunamadı, tekrar giriş yapmalısın.'); return }
+
+    let kayit: Record<string, unknown>
+
+    if (alanlar.kmh) {
+      const bakiye = parseFloat(remainingAmount)
+      const limit = parseFloat(kmhLimit)
+      const yillikFaiz = parseFloat(kmhYillikFaiz)
+      if (!bakiye || bakiye < 0) { setMessage('Güncel kullanılan bakiyeyi gir.'); return }
+      if (!limit || limit <= 0) { setMessage('Limiti gir.'); return }
+
+      kayit = {
+        user_id: user.id, category, institution_name: institutionName,
+        total_amount: bakiye, remaining_amount: bakiye,
+        installment_total: null, installment_remaining: null, aylik_taksit_tutari: null,
+        principal_amount: null, kmh_limit: limit,
+        // Kullanıcı yıllık girdi, biz aylık karşılığını saklıyoruz (interest_rate her borçta "aylık" anlamına gelir)
+        interest_rate: yillikFaiz ? yillikFaiz / 12 : null,
+        due_date: null, status: 'active',
+      }
+    } else if (alanlar.taksit) {
+      // Taksitli kredi — sistem türetiyor
+      const tutar = parseFloat(aylikTaksitTutari)
+      const sayi = parseInt(kalanTaksitSayisi)
+      if (!tutar || tutar <= 0) { setMessage('Aylık taksit tutarını gir.'); return }
+      if (!sayi || sayi <= 0) { setMessage('Kalan taksit sayısını gir.'); return }
+
+      const toplamKalan = tutar * sayi // faiz dahil, geri kalan TÜM ödeme yükü
+
+      kayit = {
+        user_id: user.id, category, institution_name: institutionName,
+        total_amount: toplamKalan, remaining_amount: toplamKalan,
+        installment_total: sayi, installment_remaining: sayi,
+        aylik_taksit_tutari: tutar,
+        principal_amount: alanlar.faiz && kalanAnapara ? parseFloat(kalanAnapara) : null,
+        interest_rate: alanlar.faiz && interestRate ? parseFloat(interestRate) : null,
+        due_date: dueDate || null, status: 'active',
+      }
+    } else {
+      // Taksitsiz (kredi kartı vb.) — eskisi gibi
+      if (!totalAmount) { setMessage('Tutarı gir.'); return }
+      const kesinKalan = alanlar.tekTutar ? totalAmount : remainingAmount
+      if (!alanlar.tekTutar && !remainingAmount) { setMessage('Kalan tutarı gir.'); return }
+
+      kayit = {
+        user_id: user.id, category, institution_name: institutionName,
+        total_amount: parseFloat(totalAmount), remaining_amount: parseFloat(kesinKalan),
+        installment_total: null, installment_remaining: null, aylik_taksit_tutari: null,
+        interest_rate: alanlar.faiz && interestRate ? parseFloat(interestRate) : null,
+        due_date: dueDate || null, status: 'active',
+      }
     }
 
-    const kesinTutar = totalAmount
-    const kesinKalan = alanlar.tekTutar ? totalAmount : remainingAmount
-
-    const { error } = await supabase.from('debts').insert({
-      user_id: user.id,
-      category,
-      institution_name: institutionName,
-      total_amount: parseFloat(kesinTutar),
-      remaining_amount: parseFloat(kesinKalan),
-      installment_total: alanlar.taksit && installmentTotal ? parseInt(installmentTotal) : null,
-      installment_remaining: alanlar.taksit && installmentRemaining ? parseInt(installmentRemaining) : null,
-      interest_rate: alanlar.faiz && interestRate ? parseFloat(interestRate) : null,
-      due_date: dueDate || null,
-      status: 'active',
-    })
+    setLoading(true)
+    const { error } = await supabase.from('debts').insert(kayit)
 
     if (error) {
       setMessage(hataMesajiCevir(error))
@@ -105,7 +152,7 @@ export default function BorcEkleModal() {
           <div>
             <label className="text-xs text-muted mb-1 block">Borç Türü</label>
             <Secim value={category} onChange={(e) => setCategory(e.target.value)}>
-              {KATEGORILER.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}
+              {BORC_KATEGORILERI.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}
             </Secim>
             <p className="text-[11px] text-muted mt-1">
               Kira, elektrik/su/internet faturası gibi her ay tekrar eden ödemelerin mi var? Onları buraya değil,{' '}
@@ -119,7 +166,57 @@ export default function BorcEkleModal() {
               className="w-full px-3 py-2.5 border border-border rounded-lg text-sm bg-white" />
           </div>
 
-          {alanlar.tekTutar ? (
+          {alanlar.kmh ? (
+            <>
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="text-xs text-muted mb-1 block">Limit (₺)</label>
+                  <input type="number" step="0.01" value={kmhLimit} onChange={(e) => setKmhLimit(e.target.value)} required
+                    className="w-full px-3 py-2.5 border border-border rounded-lg text-sm bg-white font-mono" />
+                </div>
+                <div className="flex-1">
+                  <label className="text-xs text-muted mb-1 block">Güncel Kullanılan Bakiye (₺)</label>
+                  <input type="number" step="0.01" value={remainingAmount} onChange={(e) => setRemainingAmount(e.target.value)} required
+                    className="w-full px-3 py-2.5 border border-border rounded-lg text-sm bg-white font-mono" />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-muted mb-1 block">Yıllık Faiz Oranı (%)</label>
+                <input type="number" step="0.01" value={kmhYillikFaiz} onChange={(e) => setKmhYillikFaiz(e.target.value)}
+                  className="w-full px-3 py-2.5 border border-border rounded-lg text-sm bg-white font-mono" />
+                <p className="text-[11px] text-muted mt-1">
+                  KMH'de sabit taksit yoktur — istediğin zaman istediğin tutarı ödeyebilirsin. Bu yüzden "taksit" alanı yok.
+                </p>
+              </div>
+            </>
+          ) : alanlar.taksit ? (
+            <>
+              {alanlar.faiz && (
+                <div>
+                  <label className="text-xs text-muted mb-1 block">Kalan Anapara (₺) — ekstrede "kalan anapara" yazar</label>
+                  <input type="number" step="0.01" value={kalanAnapara} onChange={(e) => setKalanAnapara(e.target.value)}
+                    className="w-full px-3 py-2.5 border border-border rounded-lg text-sm bg-white font-mono" />
+                </div>
+              )}
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="text-xs text-muted mb-1 block">Aylık Taksit Tutarı (₺)</label>
+                  <input type="number" step="0.01" value={aylikTaksitTutari} onChange={(e) => setAylikTaksitTutari(e.target.value)} required
+                    className="w-full px-3 py-2.5 border border-border rounded-lg text-sm bg-white font-mono" />
+                </div>
+                <div className="flex-1">
+                  <label className="text-xs text-muted mb-1 block">Kalan Taksit Sayısı</label>
+                  <input type="number" value={kalanTaksitSayisi} onChange={(e) => setKalanTaksitSayisi(e.target.value)} required
+                    className="w-full px-3 py-2.5 border border-border rounded-lg text-sm bg-white font-mono" />
+                </div>
+              </div>
+              {hesaplananToplam !== null && (
+                <p className="text-xs text-sage bg-sage-soft rounded-lg px-3 py-2">
+                  Toplam kalan ödemen: <b className="font-mono">{hesaplananToplam.toLocaleString('tr-TR')} ₺</b> (otomatik hesaplandı)
+                </p>
+              )}
+            </>
+          ) : alanlar.tekTutar ? (
             <div>
               <label className="text-xs text-muted mb-1 block">Tutar (₺)</label>
               <input type="number" step="0.01" value={totalAmount} onChange={(e) => setTotalAmount(e.target.value)} required
@@ -140,40 +237,25 @@ export default function BorcEkleModal() {
             </div>
           )}
 
-          {alanlar.taksit && (
-            <div className="flex gap-3">
-              <div className="flex-1">
-                <label className="text-xs text-muted mb-1 block">Toplam Taksit</label>
-                <input type="number" value={installmentTotal} onChange={(e) => setInstallmentTotal(e.target.value)}
-                  className="w-full px-3 py-2.5 border border-border rounded-lg text-sm bg-white font-mono" />
-              </div>
-              <div className="flex-1">
-                <label className="text-xs text-muted mb-1 block">Kalan Taksit</label>
-                <input type="number" value={installmentRemaining} onChange={(e) => setInstallmentRemaining(e.target.value)}
-                  className="w-full px-3 py-2.5 border border-border rounded-lg text-sm bg-white font-mono" />
-              </div>
-            </div>
-          )}
-
-          {alanlar.faiz && (
+          {alanlar.faiz && !alanlar.kmh && (
             <div>
-              <label className="text-xs text-muted mb-1 block">Faiz Oranı (%, aylık) — opsiyonel</label>
+              <label className="text-xs text-muted mb-1 block">
+                Faiz Oranı (%, aylık) {alanlar.taksit ? '— Erken Kapama Analizi için önemli' : '— opsiyonel'}
+              </label>
               <input type="number" step="0.01" value={interestRate} onChange={(e) => setInterestRate(e.target.value)}
                 className="w-full px-3 py-2.5 border border-border rounded-lg text-sm bg-white font-mono" />
             </div>
           )}
 
-          <div>
-            <label className="text-xs text-muted mb-1 block">
-              {!alanlar.taksit
-                ? 'Son Ödeme Tarihi'
-                : (installmentTotal && installmentRemaining && parseInt(installmentRemaining) < parseInt(installmentTotal))
-                  ? 'Sıradaki Taksit Tarihi'
-                  : 'İlk Taksit Tarihi'}
-            </label>
-            <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)}
-              className="w-full px-3 py-2.5 border border-border rounded-lg text-sm bg-white" />
-          </div>
+          {!alanlar.kmh && (
+            <div>
+              <label className="text-xs text-muted mb-1 block">
+                {!alanlar.taksit ? 'Son Ödeme Tarihi' : 'Sıradaki Taksit Tarihi'}
+              </label>
+              <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)}
+                className="w-full px-3 py-2.5 border border-border rounded-lg text-sm bg-white" />
+            </div>
+          )}
 
           <button type="submit" disabled={loading}
             className="mt-2 bg-navy text-paper text-sm font-medium rounded-lg py-2.5 hover:bg-navy-light transition-colors disabled:opacity-60">

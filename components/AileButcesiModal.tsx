@@ -8,6 +8,7 @@ import Skeleton from './Skeleton'
 import Monogram from './Monogram'
 import { useToast } from './Toast'
 import { davetGonder, davetiOnayla, baglantiyiSil } from '@/lib/aile-actions'
+import { toplamBorcHesapla, ayKirilimiHesapla, ayAraligiUret, toplamBirikimHesapla } from '@/lib/finans-motoru'
 
 type Baglanti = {
   id: string
@@ -53,16 +54,26 @@ export default function AileButcesiModal() {
     if (buBaglanti && buBaglanti.durum === 'onaylandi') {
       const partnerId = buBaglanti.davet_eden_id === user.id ? buBaglanti.davet_edilen_id : buBaglanti.davet_eden_id
 
-      // Kendi özetim
-      const { data: debts } = await supabase.from('debts').select('remaining_amount').eq('user_id', user.id).eq('status', 'active')
-      const toplamBorc = (debts || []).reduce((s, d) => s + Number(d.remaining_amount), 0)
+      // Kendi özetim — artık Finans Motoru üzerinden, Özet sayfasıyla BİREBİR aynı kurallarla
+      const { data: debts } = await supabase.from('debts').select('id, remaining_amount, status').eq('user_id', user.id)
+      const toplamBorc = toplamBorcHesapla(debts || [])
+      const debtIds = (debts || []).filter((d) => d.status === 'active').map((d) => d.id)
 
-      const baslangicAy = new Date(); baslangicAy.setDate(1)
-      const { data: tx } = await supabase.from('transactions').select('type, amount').eq('user_id', user.id).gte('transaction_date', baslangicAy.toISOString().slice(0, 10))
-      const net = (tx || []).reduce((s, t) => s + (t.type === 'income' ? Number(t.amount) : -Number(t.amount)), 0)
+      const bugun = new Date()
+      const { baslangic, bitis } = ayAraligiUret(bugun.getFullYear(), bugun.getMonth(), 0)
+
+      const { data: tx } = await supabase
+        .from('transactions').select('type, category, amount, transaction_date')
+        .eq('user_id', user.id).gte('transaction_date', baslangic).lt('transaction_date', bitis)
+
+      const { data: pay } = debtIds.length > 0
+        ? await supabase.from('payments').select('amount, paid_at').in('debt_id', debtIds).gte('paid_at', `${baslangic}T00:00:00`).lt('paid_at', `${bitis}T00:00:00`)
+        : { data: [] as { amount: number; paid_at: string }[] }
+
+      const { net } = ayKirilimiHesapla(tx || [], pay || [], baslangic, bitis)
 
       const { data: hedefler } = await supabase.from('savings_goals').select('current_amount').eq('user_id', user.id)
-      const toplamBirikim = (hedefler || []).reduce((s, h) => s + Number(h.current_amount), 0)
+      const toplamBirikim = toplamBirikimHesapla(hedefler || [])
 
       setBenimOzet({ borc: toplamBorc, net, birikim: toplamBirikim })
       setPartnerAdi(buBaglanti.davet_eden_id === user.id ? buBaglanti.davet_edilen_email : '')

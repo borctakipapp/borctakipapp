@@ -4,33 +4,12 @@ import Monogram from '@/components/Monogram'
 import BorcEkleModal from '@/components/BorcEkleModal'
 import BorcDetayModal from '@/components/BorcDetayModal'
 import PastaGrafik from '@/components/PastaGrafik'
-
-const KATEGORI_ETIKET: Record<string, string> = {
-  kredi_karti: 'Kredi Kartı',
-  ihtiyac_kredisi: 'İhtiyaç Kredisi',
-  konut_kredisi: 'Konut Kredisi',
-  tasit_kredisi: 'Taşıt Kredisi',
-  fatura: 'Fatura',
-  kira: 'Kira',
-  kisisel: 'Kişisel Borç',
-  taksitli_alisveris: 'Taksitli Alışveriş',
-  diger: 'Diğer',
-}
-
-const KATEGORI_RENK: Record<string, string> = {
-  kredi_karti: '#B5533C',
-  ihtiyac_kredisi: '#D98E3F',
-  konut_kredisi: '#1B2A4A',
-  tasit_kredisi: '#5B7FA6',
-  fatura: '#8B6BA8',
-  kira: '#4A7C74',
-  kisisel: '#C77B8E',
-  taksitli_alisveris: '#6B8E4E',
-  diger: '#6b6f7a',
-}
+import { BORC_KATEGORI_ETIKET as KATEGORI_ETIKET, BORC_KATEGORI_RENK as KATEGORI_RENK } from '@/lib/borc-kategorileri'
+import { toplamBorcHesapla, gunKaldiHesapla } from '@/lib/finans-motoru'
 
 const KATEGORI_IKON: Record<string, string> = {
   kredi_karti: '💳',
+  kmh: '🏦',
   ihtiyac_kredisi: '💰',
   konut_kredisi: '🏠',
   tasit_kredisi: '🚗',
@@ -41,9 +20,11 @@ const KATEGORI_IKON: Record<string, string> = {
   diger: '📄',
 }
 
-function durumBilgisi(dueDate: string | null) {
+// FİNANS MOTORU: gün farkı artık gunKaldiHesapla üzerinden — önceki hâli `Date.now()` (saat
+// bileşenli) ile UTC yarı gece tarihini kıyaslıyordu, bu da saat dilimi kaymasına açıktı.
+function durumBilgisi(dueDate: string | null, bugun: Date) {
   if (!dueDate) return { renk: 'border-border', etiket: null }
-  const gunFarki = Math.ceil((new Date(dueDate).getTime() - Date.now()) / 86400000)
+  const gunFarki = gunKaldiHesapla(dueDate, bugun)
   if (gunFarki <= 0) return { renk: 'border-brick', etiket: 'Bugün son gün', renkYazi: 'text-brick' }
   if (gunFarki <= 5) return { renk: 'border-amber', etiket: `${gunFarki} gün kaldı`, renkYazi: 'text-amber' }
   return { renk: 'border-sage', etiket: `${gunFarki} gün kaldı`, renkYazi: 'text-sage' }
@@ -60,7 +41,9 @@ export default async function BorclarPage() {
     .eq('status', 'active')
     .order('due_date', { ascending: true })
 
-  const toplamBorc = (debts || []).reduce((sum, d) => sum + Number(d.remaining_amount), 0)
+  // FİNANS MOTORU: toplam borç
+  const toplamBorc = toplamBorcHesapla(debts || [])
+  const bugunTarih = new Date()
 
   const kategoriDagilimi = Object.entries(
     (debts || []).reduce((acc: Record<string, number>, d) => {
@@ -104,7 +87,7 @@ export default async function BorclarPage() {
 
         <div className="flex flex-col gap-2">
           {debts?.map((debt) => {
-            const durum = durumBilgisi(debt.due_date)
+            const durum = durumBilgisi(debt.due_date, bugunTarih)
             return (
               <BorcDetayModal
                 key={debt.id}

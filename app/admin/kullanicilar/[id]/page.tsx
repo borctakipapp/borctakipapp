@@ -6,18 +6,7 @@ import AdminKullaniciDuzenleModal from '@/components/AdminKullaniciDuzenleModal'
 import AdminKullaniciSilPasifModal from '@/components/AdminKullaniciSilPasifModal'
 import AdminBorcDuzenleModal from '@/components/AdminBorcDuzenleModal'
 import AdminHedefDuzenleModal from '@/components/AdminHedefDuzenleModal'
-
-const KATEGORI_ETIKET: Record<string, string> = {
-  kredi_karti: 'Kredi Kartı',
-  ihtiyac_kredisi: 'İhtiyaç Kredisi',
-  konut_kredisi: 'Konut Kredisi',
-  tasit_kredisi: 'Taşıt Kredisi',
-  fatura: 'Fatura',
-  kira: 'Kira',
-  kisisel: 'Kişisel Borç',
-  taksitli_alisveris: 'Taksitli Alışveriş',
-  diger: 'Diğer',
-}
+import { BORC_KATEGORI_ETIKET as KATEGORI_ETIKET } from '@/lib/borc-kategorileri'
 
 export default async function AdminKullaniciDetayPage({
   params,

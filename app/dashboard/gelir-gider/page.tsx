@@ -12,6 +12,7 @@ import GelirGiderDuzenleModal from '@/components/GelirGiderDuzenleModal'
 import DuzenliIslemlerModal from '@/components/DuzenliIslemlerModal'
 import BorcDetayModal from '@/components/BorcDetayModal'
 import Secim from '@/components/Secim'
+import { birikimdenCekimNetle, netHesapla, tahminiAySonuHesapla } from '@/lib/finans-motoru'
 
 const AY_ISIMLERI = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık']
 
@@ -526,12 +527,9 @@ function GelirGiderPageIc() {
     fetchData()
   }
 
-  // "Birikimden Çekim" gerçek bir gelir değil — kendi biriktirdiğin parayı geri almak.
-  // Bu yüzden Gelir'e saymıyoruz, bunun yerine aynı ayki "Birikim Aktarımı" giderinden düşüyoruz (net biriktirdiğini gösteriyor).
-  const birikimdenCekimToplami = transactions.filter((t) => t.type === 'income' && t.category === 'Birikimden Çekim').reduce((s, t) => s + Number(t.amount), 0)
-  const toplamGelir = transactions.filter((t) => t.type === 'income' && t.category !== 'Birikimden Çekim').reduce((s, t) => s + Number(t.amount), 0)
-  const manuelGider = transactions.filter((t) => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0) - birikimdenCekimToplami
-  const netDurum = toplamGelir - manuelGider - borcOdemeleri
+  // --- FİNANS MOTORU: Birikimden Çekim netleme + net formülü (artık tek yerden) ---
+  const { gelir: toplamGelir, gider: manuelGider, birikimdenCekimToplami } = birikimdenCekimNetle(transactions)
+  const netDurum = netHesapla(toplamGelir, manuelGider, borcOdemeleri)
 
   const giderKategorileri: { label: string; tutar: number; renk: string }[] = []
   const giderMap: Record<string, number> = {}
@@ -620,13 +618,27 @@ function GelirGiderPageIc() {
         {sekme === 'buay' && (
         <>
         {(() => {
+          // FİNANS MOTORU: artık sadece borç taksitlerini değil, planlanan gelir/gideri de dahil ediyor (FAZ 0, madde 3)
           const buAyOdenmemisBorc = planlananTaksitler.filter((p) => !p.gelecek).reduce((s, p) => s + p.tutar, 0)
-          if (buAyOdenmemisBorc <= 0) return null
-          const tahmini = devredenBakiye + netDurum - buAyOdenmemisBorc
+          const planlananGelirKalan = planlananIslemler.filter((p) => p.type === 'income').reduce((s, p) => s + Number(p.amount), 0)
+          const planlananGiderKalan = planlananIslemler.filter((p) => p.type === 'expense').reduce((s, p) => s + Number(p.amount), 0)
+
+          if (buAyOdenmemisBorc <= 0 && planlananGelirKalan <= 0 && planlananGiderKalan <= 0) return null
+
+          const tahmini = tahminiAySonuHesapla({
+            devredenBakiye, buAyGerceklesenNet: netDurum,
+            planlananGelir: planlananGelirKalan, planlananGider: planlananGiderKalan, planlananBorcTaksitleri: buAyOdenmemisBorc,
+          })
+
+          const parcalar: string[] = []
+          if (buAyOdenmemisBorc > 0) parcalar.push(`${buAyOdenmemisBorc.toLocaleString('tr-TR', { maximumFractionDigits: 0 })} ₺ borç taksiti`)
+          if (planlananGiderKalan > 0) parcalar.push(`${planlananGiderKalan.toLocaleString('tr-TR', { maximumFractionDigits: 0 })} ₺ planlı gider`)
+          if (planlananGelirKalan > 0) parcalar.push(`${planlananGelirKalan.toLocaleString('tr-TR', { maximumFractionDigits: 0 })} ₺ planlı gelir`)
+
           return (
             <div className="rounded-lg p-3 border border-dashed border-border bg-white mb-6">
               <p className="text-[11px] text-muted mb-0.5">
-                Tahmini Ay Sonu Bakiyesi — bu ayki {buAyOdenmemisBorc.toLocaleString('tr-TR', { maximumFractionDigits: 0 })} ₺ borcunu da ödersen
+                Tahmini Ay Sonu Bakiyesi — {parcalar.join(', ')} dahil
               </p>
               <p className={`font-mono text-base font-medium ${tahmini >= 0 ? 'text-navy' : 'text-brick'}`}>
                 {tahmini.toLocaleString('tr-TR')} ₺

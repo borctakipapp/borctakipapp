@@ -2,14 +2,16 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import MaasOnboardingBanner from '@/components/MaasOnboardingBanner'
 import OzetSekmeler from '@/components/OzetSekmeler'
+import {
+  toplamBorcHesapla, ayKirilimiHesapla, aylikBorcYukuHesapla, borcGelirOraniHesapla,
+  gecikenBorcSayisiHesapla, saglikSkoruHesapla, ayAraligiUret, ikiBasamak as ikiBasamakOz,
+  netServetHesapla, gunKaldiHesapla, giderKategorileriHesapla, borcKapanmaTahminiHesapla, enYuksekFaizliBorcBul,
+  toplamBirikimHesapla, toplamBekleyenAlacakHesapla,
+} from '@/lib/finans-motoru'
 
 const KATEGORI_RENK: Record<string, string> = {
   'Market/Gıda': '#B5533C', 'Ulaşım': '#D98E3F', 'Eğlence': '#7f8ba0', 'Sağlık': '#1B2A4A',
   'Giyim': '#9c7ab5', 'Eğitim': '#4A7C74', 'Kişisel Bakım': '#c98a8a', 'Birikim Aktarımı': '#4A7C74', 'Ortak Hesap': '#D9A441', 'Diğer Gider': '#6b6f7a',
-}
-
-function ikiBasamakOz(n: number) {
-  return String(n).padStart(2, '0')
 }
 
 export default async function OzetPage() {
@@ -21,10 +23,7 @@ export default async function OzetPage() {
   const simdi = new Date()
   const yil = simdi.getFullYear()
   const ay = simdi.getMonth()
-  const baslangicStr = `${yil}-${ikiBasamakOz(ay + 1)}-01`
-  const bitisYil = ay === 11 ? yil + 1 : yil
-  const bitisAy = ay === 11 ? 0 : ay + 1
-  const bitisStr = `${bitisYil}-${ikiBasamakOz(bitisAy + 1)}-01`
+  const { baslangic: baslangicStr, bitis: bitisStr } = ayAraligiUret(yil, ay, 0)
 
   // Bu ay + önceki 6 ay — tüm aylık kırılımlar (bu ay, önceki ay, streak, trend grafiği)
   // TEK bir geniş sorgudan hafızada türetilecek; sıralı (bir bekleyip diğerini atan) sorgu YOK.
@@ -39,6 +38,7 @@ export default async function OzetPage() {
     { data: genisTx },
     { data: kapanmisBorclar },
     { data: benimGruplarim },
+    { data: receivables },
   ] = await Promise.all([
     supabase.from('profiles').select('full_name').eq('id', userId).single(),
     supabase.from('debts').select('*').eq('user_id', userId).eq('status', 'active').order('due_date', { ascending: true }),
@@ -46,10 +46,12 @@ export default async function OzetPage() {
     supabase.from('transactions').select('type, category, amount, transaction_date').eq('user_id', userId).gte('transaction_date', yediAyBaslangicStr).lt('transaction_date', bitisStr),
     supabase.from('debts').select('id').eq('user_id', userId).eq('status', 'paid').limit(1),
     supabase.from('gruplar').select('id').eq('olusturan_id', userId).limit(1),
+    supabase.from('receivables').select('remaining_amount, status').eq('user_id', userId).eq('status', 'pending'),
   ])
 
   const ilkIsim = profile?.full_name ? profile.full_name.split(' ')[0] : null
-  const toplamBorc = (debts || []).reduce((sum, d) => sum + Number(d.remaining_amount), 0)
+  // --- FİNANS MOTORU: toplam borç ---
+  const toplamBorc = toplamBorcHesapla(debts || [])
   const debtIds = (debts || []).map((d) => d.id)
 
   // Ödemeler de aynı 7 aylık pencerede TEK sorgu (debtIds'e bağımlı olduğu için Promise.all'a alamadık ama tek sorgu)
@@ -57,83 +59,43 @@ export default async function OzetPage() {
     ? await supabase.from('payments').select('amount, paid_at').in('debt_id', debtIds).gte('paid_at', `${yediAyBaslangicStr}T00:00:00`)
     : { data: [] as { amount: number; paid_at: string }[] }
 
-  const toplamBirikim = (hedefler || []).reduce((s, h) => s + Number(h.current_amount), 0)
-  const netDurumGenel = toplamBirikim - toplamBorc
+  // --- FİNANS MOTORU: Toplam Birikim ---
+  const toplamBirikim = toplamBirikimHesapla(hedefler || [])
+  // --- FİNANS MOTORU: Net Servet ---
+  const netDurumGenel = netServetHesapla(toplamBirikim, toplamBorc)
   const aktifHedef = (hedefler || []).find((h) => Number(h.current_amount) < Number(h.target_amount))
   const aktifHedefOrani = aktifHedef ? Math.min(100, (Number(aktifHedef.current_amount) / Number(aktifHedef.target_amount)) * 100) : 0
 
-  // Borç kapanma tahmini (son 6 ay ödemesi — genisPayments'tan türetiliyor)
-  let tahminiAy: number | null = null
-  if (debtIds.length > 0 && toplamBorc > 0 && genisPayments && genisPayments.length > 0) {
-    const toplamOdeme = genisPayments.reduce((s, p) => s + Number(p.amount), 0)
-    const aylarSet = new Set(genisPayments.map((p) => p.paid_at.slice(0, 7)))
-    const ortalamaAylikOdeme = toplamOdeme / Math.max(1, aylarSet.size)
-    if (ortalamaAylikOdeme > 0) tahminiAy = Math.ceil(toplamBorc / ortalamaAylikOdeme)
-  }
+  // --- FİNANS MOTORU: Borç kapanma tahmini (son 6 ay ödemesi) ---
+  const tahminiAy = borcKapanmaTahminiHesapla(toplamBorc, genisPayments || [])
 
-  // Yaklaşan ödemeler (en yakın 4 tanesi)
+  // Yaklaşan ödemeler (en yakın 4 tanesi) — gün farkı artık motordan
   const bugunTarih = new Date(); bugunTarih.setHours(0, 0, 0, 0)
   const yaklasanlar = (debts || [])
     .filter((d) => d.due_date)
-    .map((d) => {
-      const [y, m, g] = d.due_date.split('-').map(Number)
-      const t = new Date(y, m - 1, g)
-      const gunKaldi = Math.round((t.getTime() - bugunTarih.getTime()) / 86400000)
-      return { ...d, gunKaldi }
-    })
+    .map((d) => ({ ...d, gunKaldi: gunKaldiHesapla(d.due_date, bugunTarih) }))
     .sort((a, b) => a.gunKaldi - b.gunKaldi)
     .slice(0, 4)
   const enYakinOdeme = yaklasanlar[0]
 
-  const gecikenSayisi = (debts || [])
-    .filter((d) => d.due_date)
-    .map((d) => {
-      const [y, m, g] = d.due_date.split('-').map(Number)
-      const t = new Date(y, m - 1, g)
-      return Math.round((t.getTime() - bugunTarih.getTime()) / 86400000)
-    })
-    .filter((g) => g < 0).length
+  // --- FİNANS MOTORU: geciken borç sayısı, yapısal aylık borç yükü, en yüksek faizli borç ---
+  const gecikenSayisi = gecikenBorcSayisiHesapla(debts || [], bugunTarih)
+  const aylikBorcYuku = aylikBorcYukuHesapla(debts || [])
+  const enYuksekFaizliBorc = enYuksekFaizliBorcBul(debts || [])
 
-  const aylikBorcYuku = (debts || []).reduce((s, d) => {
-    if (d.installment_total && d.installment_remaining) return s + (Number(d.remaining_amount) / d.installment_remaining)
-    return s
-  }, 0)
-
-  const enYuksekFaizliBorc = (debts || [])
-    .filter((d) => d.interest_rate && Number(d.interest_rate) > 0)
-    .sort((a, b) => Number(b.interest_rate) - Number(a.interest_rate))[0]
-
-  // --- Aylık kırılım yardımcı fonksiyonu — hafızada, sorgu ATMADAN hesaplıyor ---
-  function ayAraligi(hedefAyOffset: number) {
-    const tarih = new Date(yil, ay - hedefAyOffset, 1)
-    const y = tarih.getFullYear(); const m = tarih.getMonth()
-    const bas = `${y}-${ikiBasamakOz(m + 1)}-01`
-    const bitYil = m === 11 ? y + 1 : y; const bitAy = m === 11 ? 0 : m + 1
-    const bit = `${bitYil}-${ikiBasamakOz(bitAy + 1)}-01`
-    return { bas, bit, ayIndex: m }
-  }
-
-  function ayKirilimi(hedefAyOffset: number) {
-    const { bas, bit } = ayAraligi(hedefAyOffset)
-    const txBu = (genisTx || []).filter((t) => t.transaction_date >= bas && t.transaction_date < bit)
-    const gelir = txBu.filter((t) => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0)
-    const gider = txBu.filter((t) => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0)
-    const payBu = (genisPayments || []).filter((p) => p.paid_at >= `${bas}T00:00:00` && p.paid_at < `${bit}T00:00:00`)
-    const borcOdeme = payBu.reduce((s, p) => s + Number(p.amount), 0)
-    const veriVar = txBu.length > 0 || borcOdeme > 0
-    return { gelir, gider, borcOdeme, net: gelir - gider - borcOdeme, veriVar, tx: txBu }
-  }
-
-  // Bu ayki gelir-gider
-  const buAyKirilim = ayKirilimi(0)
-  const birikimdenCekimToplamiOz = buAyKirilim.tx.filter((t) => t.type === 'income' && t.category === 'Birikimden Çekim').reduce((s, t) => s + Number(t.amount), 0)
-  const buAyGelir = buAyKirilim.gelir - birikimdenCekimToplamiOz
-  const buAyManuelGider = buAyKirilim.gider - birikimdenCekimToplamiOz
+  // --- FİNANS MOTORU: aylık kırılımlar (bu ay, önceki ay, streak, trend) ---
+  // Not: motor, "Birikimden Çekim"i HER ayda tutarlı şekilde netliyor — önceki kodda bu netleme
+  // sadece "bu ay" için yapılıyordu, streak/önceki ay hesaplarında unutulmuştu. Motora taşınca
+  // bu tutarsızlık da otomatik düzeldi.
+  const buAyAralik = ayAraligiUret(yil, ay, 0)
+  const buAyKirilim = ayKirilimiHesapla(genisTx || [], genisPayments || [], buAyAralik.baslangic, buAyAralik.bitis)
+  const buAyGelir = buAyKirilim.gelir
+  const buAyManuelGider = buAyKirilim.gider
   const buAyBorcOdemesi = buAyKirilim.borcOdeme
-  const buAyNet = buAyGelir - buAyManuelGider - buAyBorcOdemesi
+  const buAyNet = buAyKirilim.net
 
-  // Geçen ay
-  const oncekiKirilim = ayKirilimi(1)
+  const oncekiAyAralik = ayAraligiUret(yil, ay, 1)
+  const oncekiKirilim = ayKirilimiHesapla(genisTx || [], genisPayments || [], oncekiAyAralik.baslangic, oncekiAyAralik.bitis)
   const oncekiAyNet = oncekiKirilim.net
   const oncekiVeriVar = oncekiKirilim.veriVar
 
@@ -141,22 +103,24 @@ export default async function OzetPage() {
   const ilkHedefTamamlandi = (hedefler || []).some((h) => Number(h.current_amount) >= Number(h.target_amount) && Number(h.target_amount) > 0)
   const ilkGrupKuruldu = (benimGruplarim || []).length > 0
 
-  // Streak — artık sorgu atmıyor, sadece hafızadaki genisTx/genisPayments'ı tarıyor
+  // Streak — sorgu atmıyor, sadece hafızadaki genisTx/genisPayments'ı Finans Motoru ile tarıyor
   let streakAySayisi = 0
   for (let i = 0; i < 6; i++) {
-    const { net, veriVar } = ayKirilimi(i)
+    const aralik = ayAraligiUret(yil, ay, i)
+    const { net, veriVar } = ayKirilimiHesapla(genisTx || [], genisPayments || [], aralik.baslangic, aralik.bitis)
     if (!veriVar) break
     if (net >= 0) streakAySayisi++
     else break
   }
 
-  // Son 6 ay ödeme trendi (grafik için) — yine hafızadan
+  // Son 6 ay ödeme trendi (grafik için)
   const AY_KISALTMALARI = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara']
   const odemeTrendi: { etiket: string; tutar: number }[] = []
   if (debtIds.length > 0) {
     for (let i = 5; i >= 0; i--) {
-      const { ayIndex } = ayAraligi(i)
-      odemeTrendi.push({ etiket: AY_KISALTMALARI[ayIndex], tutar: ayKirilimi(i).borcOdeme })
+      const aralik = ayAraligiUret(yil, ay, i)
+      const kirilim = ayKirilimiHesapla(genisTx || [], genisPayments || [], aralik.baslangic, aralik.bitis)
+      odemeTrendi.push({ etiket: AY_KISALTMALARI[aralik.ayIndex], tutar: kirilim.borcOdeme })
     }
   }
 
@@ -167,65 +131,17 @@ export default async function OzetPage() {
     { anahtar: 'streak-3', ikon: '📈', etiket: '3 Ay Üst Üste Pozitif', kazanildi: streakAySayisi >= 3 },
   ]
 
-  // Finansal Sağlık Skoru (0-100)
-  const borcGelirOrani = buAyGelir > 0 ? aylikBorcYuku / buAyGelir : null
-  const skorNedenleri: string[] = []
-  let skor = 0
-
-  if (borcGelirOrani === null) {
-    skor += 20
-  } else if (borcGelirOrani <= 0.20) {
-    skor += 40
-  } else if (borcGelirOrani <= 0.35) {
-    skor += 28
-    skorNedenleri.push('Borç/gelir oranın orta seviyede — takipte tut')
-  } else if (borcGelirOrani <= 0.50) {
-    skor += 12
-    skorNedenleri.push('Borç/gelir oranını azaltmaya odaklanmak iyi olur')
-  } else {
-    skorNedenleri.push('Borç yükün gelirine göre ağır — önceliğin borcu azaltmak olabilir')
-  }
-
-  if (gecikenSayisi === 0) {
-    skor += 25
-  } else {
-    skorNedenleri.push(`${gecikenSayisi} borcun gecikmiş — bugün bir göz atmaya değer`)
-  }
-
-  if (buAyNet >= 0) {
-    skor += 20
-  } else {
-    skorNedenleri.push('Bu ay gider gelirden fazla oldu — geçici bir dalgalanma olabilir')
-  }
-
-  if (toplamBirikim > 0) {
-    skor += 15
-  } else {
-    skorNedenleri.push('Küçük bir birikim hedefi koymak iyi bir başlangıç olur')
-  }
-
-  skor = Math.max(0, Math.min(100, skor))
-  // Tailwind class'ları TAM/sabit string olarak yazılmalı (dinamik `bg-${x}-soft` derleme zamanında tanınmaz)
-  const skorDurum = skor >= 70
-    ? { etiket: 'İyi', badge: 'bg-sage-soft text-sage', metin: 'text-sage', cubuk: 'bg-sage' }
-    : skor >= 40
-      ? { etiket: 'Orta', badge: 'bg-amber-soft text-amber', metin: 'text-amber', cubuk: 'bg-amber' }
-      : { etiket: 'Gelişim Alanı', badge: 'bg-brick-soft text-brick', metin: 'text-brick', cubuk: 'bg-brick' }
-
-  // Gider dağılımı (mini) — bu ayki kırılımdan
-  const giderMap: Record<string, number> = {}
-  buAyKirilim.tx.filter((t) => t.type === 'expense').forEach((t) => {
-    giderMap[t.category] = (giderMap[t.category] || 0) + Number(t.amount)
+  // --- FİNANS MOTORU: Borç/Gelir oranı + Finansal Sağlık Skoru ---
+  const borcGelirOrani = borcGelirOraniHesapla(aylikBorcYuku, buAyGelir)
+  const { skor, nedenler: skorNedenleri, durum: skorDurum } = saglikSkoruHesapla({
+    borcGelirOrani, gecikenSayisi, buAyNet, toplamBirikim,
   })
-  if (birikimdenCekimToplamiOz > 0 && giderMap['Birikim Aktarımı']) {
-    giderMap['Birikim Aktarımı'] = Math.max(0, giderMap['Birikim Aktarımı'] - birikimdenCekimToplamiOz)
-  }
-  const giderListesi = Object.entries(giderMap)
-    .filter(([, tutar]) => tutar > 0)
-    .map(([kategori, tutar]) => ({ kategori, tutar, renk: KATEGORI_RENK[kategori] || '#6b6f7a' }))
-    .sort((a, b) => b.tutar - a.tutar)
-    .slice(0, 5)
-  const enBuyukGider = Math.max(...giderListesi.map((g) => g.tutar), 1)
+
+  // --- FİNANS MOTORU: gider dağılımı (Gelir-Gider sayfasıyla AYNI fonksiyon) ---
+  const { liste: giderListesi, enBuyuk: enBuyukGider } = giderKategorileriHesapla(buAyKirilim.islemler, KATEGORI_RENK)
+
+  // --- FİNANS MOTORU: Bekleyen Alacaklar (bilgi amaçlı — Net Servet'e DAHİL DEĞİL, FAZ 0.5 kararı) ---
+  const toplamBekleyenAlacak = toplamBekleyenAlacakHesapla(receivables || [])
 
   return (
     <main className="max-w-2xl mx-auto px-6 py-10 pb-24 md:pb-10">
@@ -292,6 +208,7 @@ export default async function OzetPage() {
           yaklasanlar={yaklasanlar}
           giderListesi={giderListesi}
           enBuyukGider={enBuyukGider}
+          toplamBekleyenAlacak={toplamBekleyenAlacak}
         />
       </main>
     
