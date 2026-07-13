@@ -259,6 +259,15 @@ export function gunKaldiHesapla(tarihStr: string, bugun: Date): number {
 
 // --- Gider kategorisi dağılımı — kategori bazlı toplam + renk eşleme + sıralama ---
 // Önceden Özet ve Gelir-Gider'de ayrı ayrı yazılıydı.
+//
+// ÖNEMLİ (düzeltme): "Birikimden Çekim" geliri, aynı ayki "Birikim Aktarımı" giderinden
+// netlenir (birikimdenCekimNetle ile AYNI kural, tekrar yazılmadan buradan çağrılıyor).
+// Bu netleme önceden sadece Gelir-Gider sayfasının kendi inline kodunda vardı, Özet
+// sayfası bu fonksiyona taşındığında netleme unutulmuştu — iki sayfa farklı rakam
+// gösteriyordu. Artık kural TEK yerde: hangi sayfa çağırırsa çağırsın aynı sonucu alır.
+//
+// `limit`: varsayılan 5 (Özet'in "mini" görünümü). Tüm kategorileri istiyorsan
+// `Infinity` geç (Array.slice(0, Infinity) tüm diziyi döner) — imza değişmez.
 export type GiderKalemi = { kategori: string; tutar: number; renk: string }
 
 export function giderKategorileriHesapla(
@@ -266,10 +275,16 @@ export function giderKategorileriHesapla(
   renkHaritasi: Record<string, string>,
   limit: number = 5,
 ): { liste: GiderKalemi[]; enBuyuk: number } {
+  const { birikimdenCekimToplami } = birikimdenCekimNetle(islemler)
+
   const giderMap: Record<string, number> = {}
   islemler
     .filter((t) => t.type === 'expense' && t.category !== 'Birikimden Çekim')
     .forEach((t) => { giderMap[t.category] = (giderMap[t.category] || 0) + Number(t.amount) })
+
+  if (birikimdenCekimToplami > 0 && giderMap['Birikim Aktarımı']) {
+    giderMap['Birikim Aktarımı'] = Math.max(0, giderMap['Birikim Aktarımı'] - birikimdenCekimToplami)
+  }
 
   const liste = Object.entries(giderMap)
     .filter(([, tutar]) => tutar > 0)
@@ -330,4 +345,123 @@ export function ayAraligiUret(yil: number, ayIndex0: number, hedefAyOffset: numb
   const bitAy = m === 11 ? 0 : m + 1
   const bitis = `${bitYil}-${ikiBasamak(bitAy + 1)}-01`
   return { baslangic, bitis, ayIndex: m, yil: y }
+}
+
+// ============================================================================
+// BİLDİRİM SİSTEMİ v1 — Yalnızca "hesaplanan" bildirimler (DB'de satır olarak
+// durmuyor, her çağrıda mevcut veriden yeniden türetiliyor). Olay tabanlı
+// bildirimler (grup harcaması, davet vb.) kapsam dışı — v2'de `notifications`
+// tablosu ve RPC'lerle, Finance Engine'in DIŞINDA ele alınacak.
+// ============================================================================
+
+export type BildirimTuru = 'borc_yaklasan' | 'borc_gecikti' | 'duzenli_yaklasan' | 'alacak_yaklasan' | 'alacak_gecikti' | 'butce_asildi'
+export type BildirimOnceligi = 'kritik' | 'uyari' | 'bilgi'
+
+export type HesaplananBildirim = {
+  tur: BildirimTuru
+  oncelik: BildirimOnceligi
+  id: string
+  baslik: string
+  altBaslik: string
+  tutar: number
+  gunKaldi: number | null // 'butce_asildi' için gün kavramı yok
+}
+
+type BorcKaynagi = { id: string; institution_name: string; remaining_amount: number | string; due_date: string | null }
+type DuzenliKaynagi = { id: string; category: string; description: string | null; amount: number | string; day_of_month: number }
+type AlacakKaynagi = { id: string; contact_name: string; remaining_amount: number | string; expected_date: string | null }
+
+// Düzenli işlemin bu ya da gelecek ayki tekrar tarihini hesaplar (BildirimZili'nden taşındı)
+export function sonrakiTarihHesapla(gun: number, bugun: Date = new Date()): Date {
+  const buAySonGun = new Date(bugun.getFullYear(), bugun.getMonth() + 1, 0).getDate()
+  const buAyGun = Math.min(gun, buAySonGun)
+  let hedef = new Date(bugun.getFullYear(), bugun.getMonth(), buAyGun)
+  hedef.setHours(0, 0, 0, 0)
+  const bugunSifirli = new Date(bugun)
+  bugunSifirli.setHours(0, 0, 0, 0)
+
+  if (hedef < bugunSifirli) {
+    const gelecekAyYil = bugun.getMonth() === 11 ? bugun.getFullYear() + 1 : bugun.getFullYear()
+    const gelecekAyAy = bugun.getMonth() === 11 ? 0 : bugun.getMonth() + 1
+    const gelecekAySonGun = new Date(gelecekAyYil, gelecekAyAy + 1, 0).getDate()
+    const gelecekAyGun = Math.min(gun, gelecekAySonGun)
+    hedef = new Date(gelecekAyYil, gelecekAyAy, gelecekAyGun)
+  }
+  return hedef
+}
+
+// Tek yerde: hangi bildirim tipi hangi eşikte "kritik", hangi eşikte "uyari" olur.
+const YAKLASAN_ESIK_GUN = 5
+function yaklasanOncelik(gunKaldi: number): BildirimOnceligi | null {
+  if (gunKaldi < 0) return 'kritik'
+  if (gunKaldi <= YAKLASAN_ESIK_GUN) return 'uyari'
+  return null // eşik dışı, bildirime dönüşmez
+}
+
+const ONCELIK_SIRASI: Record<BildirimOnceligi, number> = { kritik: 0, uyari: 1, bilgi: 2 }
+
+export function bildirimleriHesapla(
+  borclar: BorcKaynagi[],
+  duzenliIslemler: DuzenliKaynagi[],
+  alacaklar: AlacakKaynagi[],
+  buAyGiderKategorileri: { kategori: string; tutar: number }[],
+  harcamaLimitleri: Record<string, number>,
+  bugun: Date = new Date(),
+): HesaplananBildirim[] {
+  const sonuc: HesaplananBildirim[] = []
+
+  // --- Borçlar ---
+  for (const b of borclar) {
+    if (!b.due_date) continue
+    const gunKaldi = gunKaldiHesapla(b.due_date, bugun)
+    const oncelik = yaklasanOncelik(gunKaldi)
+    if (!oncelik) continue
+    sonuc.push({
+      tur: gunKaldi < 0 ? 'borc_gecikti' : 'borc_yaklasan',
+      oncelik, id: b.id, baslik: b.institution_name, altBaslik: '',
+      tutar: Number(b.remaining_amount), gunKaldi,
+    })
+  }
+
+  // --- Düzenli işlemler ---
+  for (const r of duzenliIslemler) {
+    const tarih = sonrakiTarihHesapla(r.day_of_month, bugun)
+    const tarihStr = `${tarih.getFullYear()}-${ikiBasamak(tarih.getMonth() + 1)}-${ikiBasamak(tarih.getDate())}`
+    const gunKaldi = gunKaldiHesapla(tarihStr, bugun)
+    const oncelik = yaklasanOncelik(gunKaldi)
+    if (!oncelik) continue
+    sonuc.push({
+      tur: 'duzenli_yaklasan', oncelik, id: r.id, baslik: r.category, altBaslik: r.description || '',
+      tutar: Number(r.amount), gunKaldi,
+    })
+  }
+
+  // --- Bekleyen Alacaklar ---
+  for (const a of alacaklar) {
+    if (!a.expected_date) continue
+    const gunKaldi = gunKaldiHesapla(a.expected_date, bugun)
+    const oncelik = yaklasanOncelik(gunKaldi)
+    if (!oncelik) continue
+    sonuc.push({
+      tur: gunKaldi < 0 ? 'alacak_gecikti' : 'alacak_yaklasan',
+      oncelik, id: a.id, baslik: a.contact_name, altBaslik: '',
+      tutar: Number(a.remaining_amount), gunKaldi,
+    })
+  }
+
+  // --- Bütçe limitleri (bu ayki net gider dağılımı, limitleri aşan kategoriler) ---
+  for (const g of buAyGiderKategorileri) {
+    const limit = harcamaLimitleri[g.kategori]
+    if (!limit || g.tutar <= limit) continue
+    sonuc.push({
+      tur: 'butce_asildi', oncelik: 'kritik', id: g.kategori, baslik: g.kategori,
+      altBaslik: `Limit: ${limit.toLocaleString('tr-TR')} ₺`, tutar: g.tutar - limit, gunKaldi: null,
+    })
+  }
+
+  return sonuc.sort((x, y) => {
+    const p = ONCELIK_SIRASI[x.oncelik] - ONCELIK_SIRASI[y.oncelik]
+    if (p !== 0) return p
+    return (x.gunKaldi ?? 999) - (y.gunKaldi ?? 999)
+  })
 }

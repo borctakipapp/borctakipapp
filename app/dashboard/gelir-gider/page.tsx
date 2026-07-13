@@ -12,7 +12,7 @@ import GelirGiderDuzenleModal from '@/components/GelirGiderDuzenleModal'
 import DuzenliIslemlerModal from '@/components/DuzenliIslemlerModal'
 import BorcDetayModal from '@/components/BorcDetayModal'
 import Secim from '@/components/Secim'
-import { birikimdenCekimNetle, netHesapla, tahminiAySonuHesapla } from '@/lib/finans-motoru'
+import { birikimdenCekimNetle, netHesapla, tahminiAySonuHesapla, giderKategorileriHesapla } from '@/lib/finans-motoru'
 
 const AY_ISIMLERI = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık']
 
@@ -527,23 +527,18 @@ function GelirGiderPageIc() {
     fetchData()
   }
 
-  // --- FİNANS MOTORU: Birikimden Çekim netleme + net formülü (artık tek yerden) ---
-  const { gelir: toplamGelir, gider: manuelGider, birikimdenCekimToplami } = birikimdenCekimNetle(transactions)
+  // --- FİNANS MOTORU: Birikimden Çekim netleme + net formülü (tek yerden) ---
+  const { gelir: toplamGelir, gider: manuelGider } = birikimdenCekimNetle(transactions)
   const netDurum = netHesapla(toplamGelir, manuelGider, borcOdemeleri)
 
-  const giderKategorileri: { label: string; tutar: number; renk: string }[] = []
-  const giderMap: Record<string, number> = {}
-  transactions.filter((t) => t.type === 'expense').forEach((t) => {
-    giderMap[t.category] = (giderMap[t.category] || 0) + Number(t.amount)
-  })
-  // "Birikimden Çekim" gelirini, aynı ayki "Birikim Aktarımı" giderinden düşerek net göster
-  if (birikimdenCekimToplami > 0 && giderMap['Birikim Aktarımı']) {
-    giderMap['Birikim Aktarımı'] = Math.max(0, giderMap['Birikim Aktarımı'] - birikimdenCekimToplami)
-  }
-  Object.entries(giderMap).forEach(([kategori, tutar]) => {
-    if (tutar <= 0) return
-    giderKategorileri.push({ label: kategori, tutar, renk: KATEGORI_RENK[kategori] || '#6b6f7a' })
-  })
+  // --- FİNANS MOTORU: Gider dağılımı — Özet'le AYNI fonksiyon, AYNI netleme kuralı ---
+  // limit=Infinity: Özet sadece ilk 5'i gösterir (mini widget), burada TÜM kategoriler
+  // isteniyor — imza değişmeden (limit hâlâ number) tüm listeyi almanın yolu bu.
+  // "Birikim Aktarımı" / "Birikimden Çekim" netlemesi artık motorun içinde, burada tekrar
+  // yazılmıyor.
+  const { liste: motorGiderListesi } = giderKategorileriHesapla(transactions, KATEGORI_RENK, Infinity)
+  const giderKategorileri: { label: string; tutar: number; renk: string }[] =
+    motorGiderListesi.map((g) => ({ label: g.kategori, tutar: g.tutar, renk: g.renk }))
   if (borcOdemeleri > 0) {
     giderKategorileri.push({ label: 'Borç Ödemeleri', tutar: borcOdemeleri, renk: '#1B2A4A' })
   }

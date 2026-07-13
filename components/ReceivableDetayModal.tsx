@@ -10,7 +10,7 @@ import { useToast } from './Toast'
 import { hataMesajiCevir } from '@/lib/hata-mesaji'
 import { tahsilatKaydet } from '@/lib/receivable-service'
 
-type Receivable = {
+export type Receivable = {
   id: string
   contact_name: string
   description: string | null

@@ -5,41 +5,21 @@ import { createClient } from '@/lib/supabase/client'
 import Monogram from '@/components/Monogram'
 import BorcDetayModal from '@/components/BorcDetayModal'
 import DuzenliIslemlerModal from '@/components/DuzenliIslemlerModal'
-import { gunKaldiHesapla, ikiBasamak } from '@/lib/finans-motoru'
+import ReceivableDetayModal, { type Receivable } from '@/components/ReceivableDetayModal'
+import { bildirimleriHesapla, giderKategorileriHesapla, ikiBasamak, type HesaplananBildirim } from '@/lib/finans-motoru'
 
-type Bildirim = {
-  tur: 'borc' | 'duzenli'
-  id: string
-  baslik: string
-  altBaslik: string
-  tutar: number
-  gunKaldi: number
-}
+const RENK_HARITASI: Record<string, string> = {} // bütçe hesabı için renk önemli değil, sadece tutar lazım
 
-function sonrakiTarihHesapla(gun: number): Date {
-  const bugun = new Date()
-  const buAySonGun = new Date(bugun.getFullYear(), bugun.getMonth() + 1, 0).getDate()
-  const buAyGun = Math.min(gun, buAySonGun)
-  let hedef = new Date(bugun.getFullYear(), bugun.getMonth(), buAyGun)
-  hedef.setHours(0, 0, 0, 0)
-  const bugunSifirli = new Date(bugun)
-  bugunSifirli.setHours(0, 0, 0, 0)
-
-  if (hedef < bugunSifirli) {
-    const gelecekAyYil = bugun.getMonth() === 11 ? bugun.getFullYear() + 1 : bugun.getFullYear()
-    const gelecekAyAy = bugun.getMonth() === 11 ? 0 : bugun.getMonth() + 1
-    const gelecekAySonGun = new Date(gelecekAyYil, gelecekAyAy + 1, 0).getDate()
-    const gelecekAyGun = Math.min(gun, gelecekAySonGun)
-    hedef = new Date(gelecekAyYil, gelecekAyAy, gelecekAyGun)
-  }
-  return hedef
+function tarihStr(d: Date): string {
+  return `${d.getFullYear()}-${ikiBasamak(d.getMonth() + 1)}-${ikiBasamak(d.getDate())}`
 }
 
 export default function BildirimZili() {
   const supabase = createClient()
   const [acik, setAcik] = useState(false)
   const [yukleniyor, setYukleniyor] = useState(true)
-  const [bildirimler, setBildirimler] = useState<Bildirim[]>([])
+  const [bildirimler, setBildirimler] = useState<HesaplananBildirim[]>([])
+  const [receivableMap, setReceivableMap] = useState<Record<string, Receivable>>({})
   const [kullaniciId, setKullaniciId] = useState('')
   const kutuRef = useRef<HTMLDivElement>(null)
   // BildirimZili, layout'ta hem mobil hem masaüstü sürümünde (CSS ile gizli/görünür) aynı anda
@@ -54,40 +34,54 @@ export default function BildirimZili() {
 
     const bugun = new Date()
     bugun.setHours(0, 0, 0, 0)
+    const esikTarih = new Date(bugun)
+    esikTarih.setDate(esikTarih.getDate() + 5)
+    const esikTarihStr = tarihStr(esikTarih)
+    const ayBaslangic = `${bugun.getFullYear()}-${ikiBasamak(bugun.getMonth() + 1)}-01`
 
-    // Borçlar
-    const { data: debts } = await supabase
-      .from('debts')
-      .select('id, institution_name, remaining_amount, due_date')
-      .eq('user_id', user.id)
-      .eq('status', 'active')
-      .not('due_date', 'is', null)
+    // DB seviyesinde filtre: sadece eşik tarihine kadar olanları çek (client-side'da
+    // tüm aktif kayıtları çekip filtrelemek yerine) — modül sayısı arttıkça bu önemli.
+    const [
+      { data: debts, error: debtsHata },
+      { data: duzenliler, error: duzenliHata },
+      { data: receivables, error: receivablesHata },
+      { data: limitler, error: limitlerHata },
+      { data: buAyIslemler, error: islemlerHata },
+    ] = await Promise.all([
+      supabase.from('debts').select('id, institution_name, remaining_amount, due_date')
+        .eq('user_id', user.id).eq('status', 'active').not('due_date', 'is', null).lte('due_date', esikTarihStr),
+      supabase.from('recurring_items').select('id, category, description, amount, day_of_month')
+        .eq('user_id', user.id).eq('type', 'expense').eq('active', true),
+      supabase.from('receivables').select('id, contact_name, description, total_amount, remaining_amount, expected_date, status, closed_at')
+        .eq('user_id', user.id).eq('status', 'pending').not('expected_date', 'is', null).lte('expected_date', esikTarihStr),
+      supabase.from('harcama_limitleri').select('category, aylik_limit').eq('user_id', user.id),
+      supabase.from('transactions').select('type, category, amount, transaction_date')
+        .eq('user_id', user.id).eq('type', 'expense').gte('transaction_date', ayBaslangic),
+    ])
 
-    const borcListesi: Bildirim[] = (debts || [])
-      .map((d) => ({
-        tur: 'borc' as const, id: d.id, baslik: d.institution_name, altBaslik: '',
-        tutar: Number(d.remaining_amount), gunKaldi: gunKaldiHesapla(d.due_date, bugun),
-      }))
-      .filter((d) => d.gunKaldi <= 5)
+    // TEŞHİS: önceden bu hatalar sessizce yutuluyordu (sadece `data` okunuyordu, `error`
+    // hiç kontrol edilmiyordu) — düzenli işlem/alacak bildirimlerinin neden görünmediğini
+    // tespit edemiyorduk. Artık her sorgu hatası konsola düşüyor, kaynağı net görünüyor.
+    if (debtsHata) console.error('[BildirimZili] debts sorgu hatası:', debtsHata)
+    if (duzenliHata) console.error('[BildirimZili] recurring_items sorgu hatası:', duzenliHata)
+    if (receivablesHata) console.error('[BildirimZili] receivables sorgu hatası:', receivablesHata)
+    if (limitlerHata) console.error('[BildirimZili] harcama_limitleri sorgu hatası:', limitlerHata)
+    if (islemlerHata) console.error('[BildirimZili] transactions sorgu hatası:', islemlerHata)
 
-    // Düzenli işlemler (faturalar/giderler) — yaklaşan tekrar tarihini kendimiz hesaplıyoruz
-    const { data: duzenliler } = await supabase
-      .from('recurring_items')
-      .select('id, category, description, amount, day_of_month')
-      .eq('user_id', user.id)
-      .eq('type', 'expense')
-      .eq('active', true)
+    // Düzenli işlemlerin "sonraki tarihi" DB'de yok, TS'de hesaplanıyor — bu yüzden hepsini
+    // çekip motor fonksiyonuna bırakıyoruz (motor zaten 5 gün eşiğini kendi içinde uyguluyor).
+    const harcamaLimitleriMap: Record<string, number> = {}
+    ;(limitler || []).forEach((l) => { harcamaLimitleriMap[l.category] = Number(l.aylik_limit) })
 
-    const duzenliListesi: Bildirim[] = (duzenliler || [])
-      .map((r) => {
-        const tarih = sonrakiTarihHesapla(r.day_of_month)
-        const tarihStr = `${tarih.getFullYear()}-${ikiBasamak(tarih.getMonth() + 1)}-${ikiBasamak(tarih.getDate())}`
-        const gunKaldi = gunKaldiHesapla(tarihStr, bugun)
-        return { tur: 'duzenli' as const, id: r.id, baslik: r.category, altBaslik: r.description || '', tutar: Number(r.amount), gunKaldi }
-      })
-      .filter((d) => d.gunKaldi <= 5)
+    const { liste: buAyGiderKategorileri } = giderKategorileriHesapla(buAyIslemler || [], RENK_HARITASI, Infinity)
 
-    const hepsi = [...borcListesi, ...duzenliListesi].sort((a, b) => a.gunKaldi - b.gunKaldi)
+    const harita: Record<string, Receivable> = {}
+    ;(receivables || []).forEach((r) => { harita[r.id] = r })
+    setReceivableMap(harita)
+
+    const hepsi = bildirimleriHesapla(
+      debts || [], duzenliler || [], receivables || [], buAyGiderKategorileri, harcamaLimitleriMap, bugun,
+    )
     setBildirimler(hepsi)
     setYukleniyor(false)
   }, [])
@@ -119,7 +113,9 @@ export default function BildirimZili() {
     return () => document.removeEventListener('mousedown', disaTikla)
   }, [])
 
-  function gunEtiketi(gunKaldi: number) {
+  function gunEtiketi(b: HesaplananBildirim) {
+    if (b.tur === 'butce_asildi') return { metin: `${b.tutar.toLocaleString('tr-TR')} ₺ aşıldı`, renk: 'text-brick' }
+    const gunKaldi = b.gunKaldi ?? 0
     if (gunKaldi < 0) return { metin: `${Math.abs(gunKaldi)} gün gecikti`, renk: 'text-brick' }
     if (gunKaldi === 0) return { metin: 'Bugün', renk: 'text-brick' }
     if (gunKaldi === 1) return { metin: 'Yarın', renk: 'text-amber' }
@@ -159,27 +155,38 @@ export default function BildirimZili() {
           ) : (
             <div className="max-h-72 overflow-y-auto">
               {bildirimler.map((b) => {
-                const etiket = gunEtiketi(b.gunKaldi)
+                const etiket = gunEtiketi(b)
+                const rozet = b.tur === 'duzenli_yaklasan' ? '↻' : b.tur === 'butce_asildi' ? '🎯' : b.tur.startsWith('alacak') ? '↙' : ''
                 const satir = (
                   <div className="flex items-center gap-2.5 px-4 py-2.5 hover:bg-paper transition-colors cursor-pointer">
                     <Monogram isim={b.baslik} boyut={28} />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-navy font-medium truncate">
-                        {b.baslik} {b.tur === 'duzenli' && <span className="text-[10px] text-muted">↻</span>}
+                        {b.baslik} {rozet && <span className="text-[10px] text-muted">{rozet}</span>}
                       </p>
                       <p className={`text-[11px] ${etiket.renk}`}>{etiket.metin}</p>
                     </div>
                     <span className="font-mono text-xs text-navy shrink-0">
-                      {b.tutar.toLocaleString('tr-TR')} ₺
+                      {b.tur === 'butce_asildi' ? b.altBaslik : `${b.tutar.toLocaleString('tr-TR')} ₺`}
                     </span>
                   </div>
                 )
                 return (
-                  <div key={`${b.tur}-${b.id}`} onClick={() => setAcik(false)} className="border-b border-border last:border-0">
-                    {b.tur === 'borc' ? (
+                  // NOT: Burada önceden `onClick={() => setAcik(false)}` vardı — aynı tıklama
+                  // olayında hem içteki modal `acik=true` yapıyor hem bu dış div `acik=false`
+                  // yapıp paneli unmount ediyordu, modal render olmadan siliniyordu (hiçbir
+                  // bildirim tıklanınca açılmıyordu). Artık panel'i sadece "dışarı tıkla"
+                  // mekanizması (aşağıdaki disaTikla efekti) kapatıyor.
+                  <div key={`${b.tur}-${b.id}`} className="border-b border-border last:border-0">
+                    {b.tur === 'borc_yaklasan' || b.tur === 'borc_gecikti' ? (
                       <BorcDetayModal debtId={b.id} tetikleyici={satir} />
-                    ) : (
+                    ) : b.tur === 'duzenli_yaklasan' ? (
                       <DuzenliIslemlerModal tetikleyiciOzel={satir} />
+                    ) : b.tur === 'alacak_yaklasan' || b.tur === 'alacak_gecikti' ? (
+                      receivableMap[b.id] ? <ReceivableDetayModal receivable={receivableMap[b.id]} tetikleyici={satir} /> : satir
+                    ) : (
+                      // butce_asildi: ayrı bir detay modali yok, Gelir-Gider'e yönlendir
+                      <a href="/dashboard/gelir-gider" onClick={() => setAcik(false)}>{satir}</a>
                     )}
                   </div>
                 )
