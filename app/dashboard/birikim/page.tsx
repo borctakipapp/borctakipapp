@@ -53,10 +53,10 @@ export default async function BirikimPage() {
                     <div className="flex items-center gap-3 mb-2">
                       <Monogram isim={h.goal_name} boyut={34} />
                       <div className="flex-1 min-w-0 flex items-center justify-between gap-2">
-                        <p className="font-medium text-navy text-sm truncate">
-                          {h.goal_name}
-                          {tamamlandi && <span className="ml-1.5 text-[10px] text-sage">✓ Tamamlandı</span>}
-                        </p>
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <p className="font-medium text-navy text-sm truncate min-w-0" title={h.goal_name}>{h.goal_name}</p>
+                          {tamamlandi && <span className="text-[10px] text-sage shrink-0">✓ Tamamlandı</span>}
+                        </div>
                         <span className="font-mono text-xs text-muted shrink-0">
                           {Number(h.current_amount).toLocaleString('tr-TR')} / {Number(h.target_amount).toLocaleString('tr-TR')} ₺
                         </span>

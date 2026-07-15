@@ -50,7 +50,7 @@ export default function BildirimZili() {
     ] = await Promise.all([
       supabase.from('debts').select('id, institution_name, remaining_amount, due_date')
         .eq('user_id', user.id).eq('status', 'active').not('due_date', 'is', null).lte('due_date', esikTarihStr),
-      supabase.from('recurring_items').select('id, category, description, amount, day_of_month')
+      supabase.from('recurring_items').select('id, category, description, amount, day_of_month, abonelik_mi, vergi_harc_mi, saglayici_adi, fatura_dongusu, fatura_ay, iptal_hatirlatma_gun')
         .eq('user_id', user.id).eq('type', 'expense').eq('active', true),
       supabase.from('receivables').select('id, contact_name, description, total_amount, remaining_amount, expected_date, status, closed_at')
         .eq('user_id', user.id).eq('status', 'pending').not('expected_date', 'is', null).lte('expected_date', esikTarihStr),
@@ -161,9 +161,10 @@ export default function BildirimZili() {
                   <div className="flex items-center gap-2.5 px-4 py-2.5 hover:bg-paper transition-colors cursor-pointer">
                     <Monogram isim={b.baslik} boyut={28} />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm text-navy font-medium truncate">
-                        {b.baslik} {rozet && <span className="text-[10px] text-muted">{rozet}</span>}
-                      </p>
+                      <div className="flex items-center gap-1 min-w-0">
+                        <p className="text-sm text-navy font-medium truncate min-w-0" title={b.baslik}>{b.baslik}</p>
+                        {rozet && <span className="text-[10px] text-muted shrink-0">{rozet}</span>}
+                      </div>
                       <p className={`text-[11px] ${etiket.renk}`}>{etiket.metin}</p>
                     </div>
                     <span className="font-mono text-xs text-navy shrink-0">

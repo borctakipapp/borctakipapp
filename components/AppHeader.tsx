@@ -7,9 +7,15 @@ export const SEKMELER = [
   { key: 'gelir-gider', href: '/dashboard/gelir-gider', etiket: 'Gelir-Gider', ikon: '📊' },
   { key: 'birikim', href: '/dashboard/birikim', etiket: 'Birikim', ikon: '🎯' },
   { key: 'gruplar', href: '/dashboard/gruplar', etiket: 'Ortak Hesap', ikon: '👥' },
-  // masaustuSadece: true → mobil alt navigasyonda GÖSTERİLMEZ (bilinçli karar — 6.
-  // sekme mobilde sıkışık olurdu), sadece masaüstü kenar çubuğunda görünür.
-  { key: 'alacaklar', href: '/dashboard/alacaklar', etiket: 'Alacaklar', ikon: '🤝', masaustuSadece: true },
+  // Mobil alt navigasyonda (AltNavigasyon.tsx) sadece ilk 4'ü ("çekirdek") sabit
+  // gösteriliyor — geri kalanı, masaüstü kenar çubuğuyla aynı bu listeden okunan
+  // "Daha Fazla" menüsünde (MobilMenu.tsx). Masaüstü kenar çubuğu HER ZAMAN tam listeyi
+  // gösterir, burada ayrım gerekmiyor.
+  { key: 'alacaklar', href: '/dashboard/alacaklar', etiket: 'Alacaklar', ikon: '🤝' },
+  { key: 'abonelikler', href: '/dashboard/abonelikler', etiket: 'Abonelikler', ikon: '🔁' },
+  { key: 'vergiharc', href: '/dashboard/vergi-harc', etiket: 'Vergi/Harç', ikon: '🧾' },
+  { key: 'raporlar', href: '/dashboard/raporlar', etiket: 'Raporlar', ikon: '📊' },
+  { key: 'ayarlar', href: '/dashboard/ayarlar', etiket: 'Ayarlar', ikon: '⚙️' },
 ] as const
 
 export type SekmeKey = typeof SEKMELER[number]['key']

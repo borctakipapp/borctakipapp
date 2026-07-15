@@ -16,7 +16,7 @@ type GiderKalemi = { kategori: string; tutar: number; renk: string }
 export default function OzetSekmeler({
   enYuksekFaizliBorc, enYakinOdeme, buAyNet, borcGelirOrani, oncekiVeriVar, oncekiAyNet,
   streakAySayisi, aktifHedef, aktifHedefOrani, odemeTrendi, rozetler,
-  toplamBirikim, netDurumGenel, yaklasanlar, giderListesi, enBuyukGider, toplamBekleyenAlacak,
+  toplamBirikim, netDurumGenel, yaklasanlar, giderListesi, enBuyukGider, toplamBekleyenAlacak, aylikAbonelikToplami,
 }: {
   enYuksekFaizliBorc: Borc | undefined
   enYakinOdeme: YakinOdeme | undefined
@@ -35,6 +35,7 @@ export default function OzetSekmeler({
   giderListesi: GiderKalemi[]
   enBuyukGider: number
   toplamBekleyenAlacak: number
+  aylikAbonelikToplami: number
 }) {
   const [sekme, setSekme] = useState<'bugun' | 'grafikler' | 'detaylar'>('bugun')
 
@@ -209,6 +210,21 @@ export default function OzetSekmeler({
                   <p className="text-[11px] text-muted">Sana borçlu olanlar — net varlığa dahil değil</p>
                 </div>
                 <p className="font-mono text-lg text-amber font-medium">{toplamBekleyenAlacak.toLocaleString('tr-TR')} ₺</p>
+              </div>
+            </Link>
+          )}
+
+          {/* Bilgi amaçlı — aylık eşdeğer toplam, ayrı bir "gider" olarak Net Varlık'a dahil
+              EDİLMİYOR (zaten transactions'taki gerçek harcama kayıtları üzerinden ölçülüyor,
+              bu kart sadece "abonelik yükün ne kadar" sorusuna hızlı cevap) */}
+          {aylikAbonelikToplami > 0 && (
+            <Link href="/dashboard/abonelikler" className="block bg-white rounded-lg p-4 border border-border hover:shadow-sm transition-shadow mb-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-muted mb-1">Abonelikler</p>
+                  <p className="text-[11px] text-muted">Aylık eşdeğer toplam (yıllıklar 12&apos;ye bölünmüş)</p>
+                </div>
+                <p className="font-mono text-lg text-navy font-medium">{aylikAbonelikToplami.toLocaleString('tr-TR')} ₺</p>
               </div>
             </Link>
           )}

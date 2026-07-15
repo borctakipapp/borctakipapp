@@ -1,5 +1,4 @@
 import { redirect } from 'next/navigation'
-import Link from 'next/link'
 import { adminGirisKontrol, adminYetkiKontrol, adminTumYetkileriGetir, TUM_YETKILER } from '@/lib/admin-auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import YetkiDuzenleModal from '@/components/YetkiDuzenleModal'
@@ -31,11 +30,7 @@ export default async function YetkiYonetimiPage() {
   )
 
   return (
-    <div className="min-h-screen bg-paper">
-      <header className="bg-navy px-6 py-4 flex items-center justify-between sticky top-0 z-20">
-        <Link href="/admin" className="text-paper/70 hover:text-paper text-sm">← Admin Paneline Dön</Link>
-      </header>
-
+    <>
       <main className="max-w-3xl mx-auto px-6 py-10">
         <h1 className="text-xl font-medium text-navy mb-1">Yetki Yönetimi</h1>
         <p className="text-sm text-muted mb-6">Adminlere hangi işlemleri yapabileceklerini tek tek belirle.</p>
@@ -75,6 +70,6 @@ export default async function YetkiYonetimiPage() {
           ))}
         </div>
       </main>
-    </div>
+    </>
   )
 }

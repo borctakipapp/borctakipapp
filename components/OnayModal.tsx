@@ -19,6 +19,9 @@ export default function OnayModal({
 }: OnayModalProps) {
   const vazgecRef = useRef<HTMLButtonElement>(null)
   const [monteEdildi, setMonteEdildi] = useState(false)
+  // Modal.tsx'teki ile aynı düzeltme — içeride başlayıp dışarıda biten bir sürükleme
+  // (metin seçmeye çalışırken) modalı yanlışlıkla kapatmasın.
+  const mouseDownHedefRef = useRef<EventTarget | null>(null)
 
   useEffect(() => { setMonteEdildi(true) }, [])
 
@@ -42,7 +45,15 @@ export default function OnayModal({
   if (!acik || !monteEdildi) return null
 
   return createPortal(
-    <div className="fixed inset-0 bg-navy/40 flex items-center justify-center z-[100] px-6" onClick={onVazgec}>
+    <div
+      className="fixed inset-0 bg-navy/40 flex items-center justify-center z-[100] px-6"
+      onMouseDown={(e) => { mouseDownHedefRef.current = e.target }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget && mouseDownHedefRef.current === e.currentTarget) {
+          onVazgec()
+        }
+      }}
+    >
       <div
         role="alertdialog"
         aria-modal="true"

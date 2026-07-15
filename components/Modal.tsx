@@ -13,6 +13,11 @@ export default function Modal({
 }) {
   const icerikRef = useRef<HTMLDivElement>(null)
   const [monteEdildi, setMonteEdildi] = useState(false)
+  // Metin seçmek için tıklayıp modalin dışına sürükleyince (mouseup dışarıda bitince)
+  // tarayıcı bunu "arka plana tıklama" sanıp modalı kapatıyordu. mousedown'ın GERÇEKTEN
+  // arka planın kendisinde başladığını ayrıca doğruluyoruz — içeride başlayan bir
+  // sürükleme artık modalı kapatmıyor.
+  const mouseDownHedefRef = useRef<EventTarget | null>(null)
 
   // Portal sadece tarayıcıda (document var olduğunda) çalışabilir — SSR'da document yok.
   useEffect(() => { setMonteEdildi(true) }, [])
@@ -49,7 +54,12 @@ export default function Modal({
   return createPortal(
     <div
       className="fixed inset-0 bg-navy/40 flex items-end sm:items-center justify-center z-[100]"
-      onClick={onKapat}
+      onMouseDown={(e) => { mouseDownHedefRef.current = e.target }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget && mouseDownHedefRef.current === e.currentTarget) {
+          onKapat()
+        }
+      }}
     >
       <div
         ref={icerikRef}

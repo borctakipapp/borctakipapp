@@ -23,15 +23,11 @@ export default async function AdminGrupDetayPage({ params }: { params: Promise<{
   const isimBul = (userId: string) => uyeler?.find((u) => u.user_id === userId)?.ad_soyad || 'Bilinmeyen'
 
   return (
-    <div className="min-h-screen bg-paper">
-      <header className="bg-navy px-6 py-4 flex items-center justify-between sticky top-0 z-20">
-        <span className="text-paper font-medium text-sm tracking-wide">borctakipapp · admin</span>
-        <Link href="/admin/gruplar" className="text-paper/70 hover:text-paper text-xs border border-paper/30 rounded-md px-3 py-1.5 transition-colors">
+    <>
+      <main className="max-w-2xl mx-auto px-6 py-10">
+        <Link href="/admin/gruplar" className="text-xs text-muted hover:text-navy transition-colors mb-3 inline-block">
           ← Gruplara dön
         </Link>
-      </header>
-
-      <main className="max-w-2xl mx-auto px-6 py-10">
         <div className="flex items-center justify-between mb-1">
           <h1 className="text-xl font-medium text-navy">{grup.ad}</h1>
           {veriYetkisi && <AdminGrupSilButonu grupId={id} ad={grup.ad} />}
@@ -91,6 +87,6 @@ export default async function AdminGrupDetayPage({ params }: { params: Promise<{
           ))}
         </div>
       </main>
-    </div>
+    </>
   )
 }

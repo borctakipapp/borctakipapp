@@ -6,7 +6,9 @@ import AdminKullaniciDuzenleModal from '@/components/AdminKullaniciDuzenleModal'
 import AdminKullaniciSilPasifModal from '@/components/AdminKullaniciSilPasifModal'
 import AdminBorcDuzenleModal from '@/components/AdminBorcDuzenleModal'
 import AdminHedefDuzenleModal from '@/components/AdminHedefDuzenleModal'
+import AdminAlacakDuzenleModal from '@/components/AdminAlacakDuzenleModal'
 import { BORC_KATEGORI_ETIKET as KATEGORI_ETIKET } from '@/lib/borc-kategorileri'
+import { toplamBorcHesapla, toplamBirikimHesapla, toplamBekleyenAlacakHesapla } from '@/lib/finans-motoru'
 
 export default async function AdminKullaniciDetayPage({
   params,
@@ -31,21 +33,21 @@ export default async function AdminKullaniciDetayPage({
   const { data: profile } = await admin.from('profiles').select('*').eq('id', id).single()
   const { data: borclar } = await admin.from('debts').select('*').eq('user_id', id).order('created_at', { ascending: false })
   const { data: hedefler } = await admin.from('savings_goals').select('*').eq('user_id', id)
+  const { data: alacaklar } = await admin.from('receivables').select('*').eq('user_id', id).order('created_at', { ascending: false })
 
-  const aktifBorclar = (borclar || []).filter((b) => b.status === 'active')
-  const toplamBorc = aktifBorclar.reduce((s, b) => s + Number(b.remaining_amount), 0)
-  const toplamBirikim = (hedefler || []).reduce((s, h) => s + Number(h.current_amount), 0)
+  // --- FİNANS MOTORU: admin paneli artık kendi hesabını yapmıyor, kullanıcı tarafındaki
+  // AYNI fonksiyonları çağırıyor (toplamBorcHesapla, toplamBirikimHesapla,
+  // toplamBekleyenAlacakHesapla) — TECHNICAL_DEBT.md madde 2 kapandı. ---
+  const toplamBorc = toplamBorcHesapla(borclar || [])
+  const toplamBirikim = toplamBirikimHesapla(hedefler || [])
+  const toplamBekleyenAlacak = toplamBekleyenAlacakHesapla(alacaklar || [])
 
   return (
-    <div className="min-h-screen bg-paper">
-      <header className="bg-navy px-6 py-4 flex items-center justify-between sticky top-0 z-20">
-        <span className="text-paper font-medium text-sm tracking-wide">borctakipapp · admin</span>
-        <Link href="/admin/kullanicilar" className="text-paper/70 hover:text-paper text-xs border border-paper/30 rounded-md px-3 py-1.5 transition-colors">
+    <>
+      <main className="max-w-2xl mx-auto px-6 py-10">
+        <Link href="/admin/kullanicilar" className="text-xs text-muted hover:text-navy transition-colors mb-3 inline-block">
           ← Kullanıcılara dön
         </Link>
-      </header>
-
-      <main className="max-w-2xl mx-auto px-6 py-10">
         <div className="flex items-center justify-between mb-1">
           <h1 className="text-xl font-medium text-navy">{authUser.user.email}</h1>
           {pasifMi && <span className="text-[11px] bg-brick-soft text-brick px-2 py-0.5 rounded-full">Pasif</span>}
@@ -59,7 +61,7 @@ export default async function AdminKullaniciDetayPage({
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-3 mb-8">
+        <div className="grid grid-cols-3 gap-3 mb-8">
           <div className="bg-white rounded-lg p-4 border border-border">
             <p className="text-xs text-muted mb-1">Toplam Borç</p>
             <p className="font-mono text-xl text-navy font-medium">{toplamBorc.toLocaleString('tr-TR')} ₺</p>
@@ -67,6 +69,10 @@ export default async function AdminKullaniciDetayPage({
           <div className="bg-white rounded-lg p-4 border border-border">
             <p className="text-xs text-muted mb-1">Toplam Birikim</p>
             <p className="font-mono text-xl text-sage font-medium">{toplamBirikim.toLocaleString('tr-TR')} ₺</p>
+          </div>
+          <div className="bg-white rounded-lg p-4 border border-border">
+            <p className="text-xs text-muted mb-1">Bekleyen Alacak</p>
+            <p className="font-mono text-xl text-amber font-medium">{toplamBekleyenAlacak.toLocaleString('tr-TR')} ₺</p>
           </div>
         </div>
 
@@ -132,7 +138,33 @@ export default async function AdminKullaniciDetayPage({
             )
           })}
         </div>
+
+        <h2 className="text-sm font-medium text-muted mb-3 mt-8">Bekleyen Alacaklar ({alacaklar?.length || 0})</h2>
+        <div className="flex flex-col gap-2">
+          {(!alacaklar || alacaklar.length === 0) && <p className="text-muted text-sm bg-white rounded-lg p-4 border border-border">Hiç alacak kaydı yok.</p>}
+          {alacaklar?.map((a) => {
+            const durumEtiket = a.status === 'pending' ? 'Bekliyor' : a.status === 'completed' ? 'Tamamlandı' : 'İptal'
+            const kenarRengi = a.status === 'pending' ? 'border-amber' : a.status === 'completed' ? 'border-sage' : 'border-muted'
+            const satir = (
+              <div className={`bg-white rounded-lg px-4 py-3 flex items-center justify-between border-l-4 ${kenarRengi} ${veriYetkisi ? 'cursor-pointer hover:shadow-sm transition-shadow' : ''}`}>
+                <div>
+                  <p className="font-medium text-navy text-sm">{a.contact_name}</p>
+                  <p className="text-xs text-muted">{durumEtiket}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-navy text-sm">{Number(a.remaining_amount).toLocaleString('tr-TR')} ₺</span>
+                  {veriYetkisi && <span className="text-muted text-xs">✎</span>}
+                </div>
+              </div>
+            )
+            return veriYetkisi ? (
+              <AdminAlacakDuzenleModal key={a.id} alacak={a} userId={id} tetikleyici={satir} />
+            ) : (
+              <div key={a.id}>{satir}</div>
+            )
+          })}
+        </div>
       </main>
-    </div>
+    </>
   )
 }

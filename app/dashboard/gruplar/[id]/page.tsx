@@ -328,7 +328,12 @@ export default function GrupDetayPage() {
         <>
           {harcamaDilimleri.length > 0 && (
             <div className="mb-6">
-              <h2 className="text-sm font-medium text-muted mb-3">Kim Ne Kadar Harcadı</h2>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-medium text-muted">Kim Ne Kadar Harcadı</h2>
+                <span className="font-mono text-sm text-navy font-medium">
+                  Toplam: {harcamaDilimleri.reduce((s, d) => s + d.tutar, 0).toLocaleString('tr-TR')} ₺
+                </span>
+              </div>
               <div className="bg-white rounded-lg p-4 border border-border">
                 <PastaGrafik dilimler={harcamaDilimleri} />
               </div>
@@ -345,6 +350,14 @@ export default function GrupDetayPage() {
               tetikleyici={<span className="text-xs text-navy underline cursor-pointer">📒 Hesap Defteri</span>}
             />
           </div>
+          {oneriler.length > 0 && (
+            <p className="text-[11px] text-muted mb-3">
+              Bu öneriler, en az sayıda ödemeyle herkesin hesabını kapatacak şekilde otomatik
+              hesaplanır — grupta biri ödeme yaptıkça diğerlerinin &quot;kime ne kadar&quot; önerisi de
+              güncellenebilir. Gerçek bakiyen (üstteki tutar) her zaman doğrudur, sadece öneri
+              dağılımı değişebilir.
+            </p>
+          )}
           {oneriler.length === 0 ? (
             <p className="text-muted text-sm bg-white rounded-lg p-4 border border-border">Herkesin hesabı kapalı — kimse kimseye borçlu değil. 🎉</p>
           ) : (
@@ -361,7 +374,7 @@ export default function GrupDetayPage() {
                     className="w-full bg-white rounded-lg border border-border p-3 flex items-center gap-3 text-left hover:shadow-sm transition-shadow"
                   >
                     <Monogram isim={u.ad_soyad || '?'} boyut={30} />
-                    <p className="text-sm text-navy flex-1 truncate">{u.ad_soyad}</p>
+                    <p className="text-sm text-navy flex-1 min-w-0 truncate" title={u.ad_soyad || ''}>{u.ad_soyad}</p>
                     {b && Math.abs(b.net) > 0.5 && (
                       <span className={`font-mono text-xs ${b.net >= 0 ? 'text-sage' : 'text-brick'}`}>
                         {b.net >= 0 ? '+' : ''}{b.net.toLocaleString('tr-TR')} ₺
@@ -473,9 +486,13 @@ export default function GrupDetayPage() {
                 <div key={u.user_id} className="bg-white rounded-lg p-3 border border-border flex items-center gap-3">
                   <Monogram isim={u.ad_soyad || '?'} boyut={36} />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-navy font-medium truncate">
-                      {u.ad_soyad}{benimMi && <span className="text-muted font-normal"> (Sen)</span>}{buKisiOlusturanMi && <span className="text-muted font-normal"> · kurucu</span>}
-                    </p>
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <p className="text-sm text-navy font-medium truncate min-w-0" title={u.ad_soyad || ''}>
+                        {u.ad_soyad}
+                      </p>
+                      {benimMi && <span className="text-muted font-normal text-xs shrink-0">(Sen)</span>}
+                      {buKisiOlusturanMi && <span className="text-muted font-normal text-xs shrink-0">· kurucu</span>}
+                    </div>
                     {u.iban ? (
                       <button
                         onClick={() => ibanKopyala(u.iban!)}
@@ -536,6 +553,12 @@ export default function GrupDetayPage() {
           <p className="text-muted text-sm bg-white rounded-lg p-4 border border-border">Henüz harcama eklenmedi.</p>
         ) : (
           <div className="flex flex-col gap-2">
+            <div className="bg-paper rounded-lg p-3 mb-1 flex items-center justify-between">
+              <span className="text-xs text-muted">Toplam</span>
+              <span className="font-mono text-sm text-navy font-medium">
+                {harcamalar.reduce((s, h) => s + Number(h.tutar), 0).toLocaleString('tr-TR')} ₺
+              </span>
+            </div>
             {harcamalar.map((h) => {
               const odeyen = uyeler.find((u) => u.user_id === h.odeyen_id)
               const katilanSayisi = bolusumler.filter((b) => b.harcama_id === h.id).length

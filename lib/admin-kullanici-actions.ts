@@ -92,3 +92,25 @@ export async function hedefSil(hedefId: string, userId: string) {
   revalidatePath(`/admin/kullanicilar/${userId}`)
   return { basarili: true }
 }
+
+export async function alacakGuncelle(receivableId: string, userId: string, alanlar: { remaining_amount?: number; status?: string; contact_name?: string }) {
+  const yetkim = await adminYetkiKontrol('veri_mudahale')
+  if (!yetkim) return { hata: 'Bu işlem için yetkin yok.' }
+
+  const admin = createAdminClient()
+  const { error } = await admin.from('receivables').update(alanlar).eq('id', receivableId)
+  if (error) return { hata: error.message }
+  revalidatePath(`/admin/kullanicilar/${userId}`)
+  return { basarili: true }
+}
+
+export async function alacakSil(receivableId: string, userId: string) {
+  const yetkim = await adminYetkiKontrol('veri_mudahale')
+  if (!yetkim) return { hata: 'Bu işlem için yetkin yok.' }
+
+  const admin = createAdminClient()
+  const { error } = await admin.from('receivables').delete().eq('id', receivableId)
+  if (error) return { hata: error.message }
+  revalidatePath(`/admin/kullanicilar/${userId}`)
+  return { basarili: true }
+}

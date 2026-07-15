@@ -34,19 +34,7 @@ export default async function AdminKullanicilarPage({
   }
 
   return (
-    <div className="min-h-screen bg-paper">
-      <header className="bg-navy px-6 py-4 flex items-center justify-between sticky top-0 z-20">
-        <span className="text-paper font-medium text-sm tracking-wide">borctakipapp · admin</span>
-        <Link href="/dashboard" className="text-paper/70 hover:text-paper text-xs border border-paper/30 rounded-md px-3 py-1.5 transition-colors">
-          Uygulamaya dön
-        </Link>
-      </header>
-
-      <nav className="bg-navy-light px-6 py-2 flex gap-4">
-        <Link href="/admin" className="text-paper/60 hover:text-paper text-sm pb-1">Genel Bakış</Link>
-        <span className="text-paper text-sm font-medium border-b-2 border-paper pb-1">Kullanıcılar</span>
-      </nav>
-
+    <>
       <main className="max-w-3xl mx-auto px-6 py-10">
         <h1 className="text-xl font-medium text-navy mb-1">Kullanıcılar</h1>
         <p className="text-xs text-muted mb-6">Toplam {kullanicilar.length} kullanıcı {arama && `· "${arama}" için filtrelendi`}</p>
@@ -92,6 +80,6 @@ export default async function AdminKullanicilarPage({
           </table>
         </div>
       </main>
-    </div>
+    </>
   )
 }

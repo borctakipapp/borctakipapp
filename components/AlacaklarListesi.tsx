@@ -75,7 +75,7 @@ export default function AlacaklarListesi({ receivables }: { receivables: Receiva
                   <div className="w-full bg-white rounded-lg border border-border p-3 flex items-center gap-3 text-left hover:shadow-sm transition-shadow cursor-pointer">
                     <Monogram isim={r.contact_name} boyut={36} />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm text-navy font-medium truncate">{r.contact_name}</p>
+                      <p className="text-sm text-navy font-medium truncate" title={r.contact_name}>{r.contact_name}</p>
                       {r.description && <p className="text-xs text-muted truncate">{r.description}</p>}
                     </div>
                     <div className="text-right shrink-0">

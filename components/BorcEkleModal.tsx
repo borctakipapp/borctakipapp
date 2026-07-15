@@ -8,6 +8,7 @@ import Modal from './Modal'
 import { hataMesajiCevir } from '@/lib/hata-mesaji'
 import { useToast } from './Toast'
 import { BORC_KATEGORILERI } from '@/lib/borc-kategorileri'
+import { faizOraniTahminEt } from '@/lib/finans-motoru'
 
 // FAZ B: taksitli kredilerde artık "Toplam Tutar/Toplam Taksit" gibi kullanıcının kendi
 // hesaplaması gereken alanlar YOK. Sadece bankada/ekstrede yazan, doğrudan okunabilecek
@@ -38,7 +39,7 @@ export default function BorcEkleModal() {
   const [aylikTaksitTutari, setAylikTaksitTutari] = useState('') // aylik_taksit_tutari
   const [kalanTaksitSayisi, setKalanTaksitSayisi] = useState('') // installment_remaining
 
-  const [interestRate, setInterestRate] = useState('')
+  const [interestRate, setInterestRate] = useState('') // SADECE kullanıcının elle girdiği/değiştirdiği değer — boşsa otomatik hesap gösterilir
   // KMH için — yıllık faiz kullanıcıdan alınır, aylık karşılığı saklanır (interest_rate her yerde "aylık" anlamına gelir)
   const [kmhLimit, setKmhLimit] = useState('')
   const [kmhYillikFaiz, setKmhYillikFaiz] = useState('')
@@ -57,6 +58,23 @@ export default function BorcEkleModal() {
     if (!tutar || !sayi || tutar <= 0 || sayi <= 0) return null
     return tutar * sayi
   }, [aylikTaksitTutari, kalanTaksitSayisi])
+
+  // FAİZ ORANI OTOMATİK TAHMİNİ — Anapara + Taksit Tutarı + Taksit Sayısı doluysa,
+  // amortisman formülünün tersini (ikili arama ile) çözüp faiz oranını öneriyoruz.
+  // Effect/state senkronizasyonu YOK — kullanıcı elle bir şey yazmadığı sürece (interestRate
+  // boşken) ekranda gösterilen ve submit'te kullanılan değer doğrudan bu türetilen değerden
+  // geliyor. Kullanıcı elle yazınca interestRate dolar ve bunun önüne geçer.
+  const tahminiFaizOrani = useMemo(() => {
+    if (!alanlar.taksit || !alanlar.faiz) return null
+    const anapara = parseFloat(kalanAnapara)
+    const taksit = parseFloat(aylikTaksitTutari)
+    const sayi = parseInt(kalanTaksitSayisi)
+    if (!anapara || !taksit || !sayi || anapara <= 0 || taksit <= 0 || sayi <= 0) return null
+    return faizOraniTahminEt({ anapara, taksitTutari: taksit, taksitSayisi: sayi })
+  }, [kalanAnapara, aylikTaksitTutari, kalanTaksitSayisi, alanlar.taksit, alanlar.faiz])
+
+  const otomatikFaizMetni = tahminiFaizOrani !== null ? (tahminiFaizOrani * 100).toFixed(2) : ''
+  const gosterilecekFaizOrani = interestRate !== '' ? interestRate : otomatikFaizMetni
 
   function sifirlaVeKapat() {
     setAcik(false)
@@ -106,7 +124,7 @@ export default function BorcEkleModal() {
         installment_total: sayi, installment_remaining: sayi,
         aylik_taksit_tutari: tutar,
         principal_amount: alanlar.faiz && kalanAnapara ? parseFloat(kalanAnapara) : null,
-        interest_rate: alanlar.faiz && interestRate ? parseFloat(interestRate) : null,
+        interest_rate: alanlar.faiz && gosterilecekFaizOrani ? parseFloat(gosterilecekFaizOrani) : null,
         due_date: dueDate || null, status: 'active',
       }
     } else {
@@ -119,7 +137,7 @@ export default function BorcEkleModal() {
         user_id: user.id, category, institution_name: institutionName,
         total_amount: parseFloat(totalAmount), remaining_amount: parseFloat(kesinKalan),
         installment_total: null, installment_remaining: null, aylik_taksit_tutari: null,
-        interest_rate: alanlar.faiz && interestRate ? parseFloat(interestRate) : null,
+        interest_rate: alanlar.faiz && gosterilecekFaizOrani ? parseFloat(gosterilecekFaizOrani) : null,
         due_date: dueDate || null, status: 'active',
       }
     }
@@ -193,9 +211,13 @@ export default function BorcEkleModal() {
             <>
               {alanlar.faiz && (
                 <div>
-                  <label className="text-xs text-muted mb-1 block">Kalan Anapara (₺) — ekstrede "kalan anapara" yazar</label>
+                  <label className="text-xs text-muted mb-1 block">Anapara (₺)</label>
                   <input type="number" step="0.01" value={kalanAnapara} onChange={(e) => setKalanAnapara(e.target.value)}
                     className="w-full px-3 py-2.5 border border-border rounded-lg text-sm bg-white font-mono" />
+                  <p className="text-[11px] text-muted mt-1">
+                    Yeni çektiğin bir kredi ise <b>çektiğin tutarı</b> gir. Mevcut, ödemeye devam ettiğin
+                    bir kredi ise ekstrende yazan <b>güncel kalan anaparayı</b> gir.
+                  </p>
                 </div>
               )}
               <div className="flex gap-3">
@@ -242,8 +264,16 @@ export default function BorcEkleModal() {
               <label className="text-xs text-muted mb-1 block">
                 Faiz Oranı (%, aylık) {alanlar.taksit ? '— Erken Kapama Analizi için önemli' : '— opsiyonel'}
               </label>
-              <input type="number" step="0.01" value={interestRate} onChange={(e) => setInterestRate(e.target.value)}
+              <input type="number" step="0.01" value={gosterilecekFaizOrani}
+                onChange={(e) => setInterestRate(e.target.value)}
                 className="w-full px-3 py-2.5 border border-border rounded-lg text-sm bg-white font-mono" />
+              {alanlar.taksit && tahminiFaizOrani !== null && (
+                <p className="text-[11px] text-muted mt-1">
+                  {interestRate !== ''
+                    ? `Anapara/taksit bilgilerine göre hesaplanan oran %${otomatikFaizMetni}'ydi — sen elle düzelttin, öyle kalacak.`
+                    : `Anapara, taksit tutarı ve taksit sayısına göre otomatik hesaplandı. Hatalı olduğunu düşünüyorsan düzenleyebilirsin.`}
+                </p>
+              )}
             </div>
           )}
 

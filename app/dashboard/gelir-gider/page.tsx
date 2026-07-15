@@ -13,6 +13,7 @@ import DuzenliIslemlerModal from '@/components/DuzenliIslemlerModal'
 import BorcDetayModal from '@/components/BorcDetayModal'
 import Secim from '@/components/Secim'
 import { birikimdenCekimNetle, netHesapla, tahminiAySonuHesapla, giderKategorileriHesapla } from '@/lib/finans-motoru'
+import { GIDER_KATEGORI_RENK as KATEGORI_RENK } from '@/lib/gider-kategorileri'
 
 const AY_ISIMLERI = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık']
 
@@ -27,11 +28,6 @@ function tarihMetni(yil: number, ayIndex0: number, gun: number) {
 function bugunMetni() {
   const n = new Date()
   return tarihMetni(n.getFullYear(), n.getMonth(), n.getDate())
-}
-
-const KATEGORI_RENK: Record<string, string> = {
-  'Market/Gıda': '#B5533C', 'Ulaşım': '#D98E3F', 'Eğlence': '#7f8ba0', 'Sağlık': '#1B2A4A',
-  'Giyim': '#9c7ab5', 'Eğitim': '#4A7C74', 'Kişisel Bakım': '#c98a8a', 'Birikim Aktarımı': '#4A7C74', 'Ortak Hesap': '#D9A441', 'Diğer Gider': '#6b6f7a',
 }
 
 type Transaction = {

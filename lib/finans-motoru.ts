@@ -80,6 +80,14 @@ export function toplamBirikimHesapla(hedefler: SavingsGoal[]): number {
   return hedefler.reduce((s, h) => s + Number(h.current_amount), 0)
 }
 
+// --- Bir ay aralığında birikim hareketlerinin neti (Raporlar sayfası — birikim büyüme trendi) ---
+export type SavingsEntry = { amount: number | string; type: string; created_at: string }
+export function aylikBirikimNetiHesapla(entries: SavingsEntry[], ayBaslangic: string, ayBitis: string): number {
+  return entries
+    .filter((e) => e.created_at >= ayBaslangic && e.created_at < ayBitis)
+    .reduce((s, e) => s + (e.type === 'add' ? Number(e.amount) : -Number(e.amount)), 0)
+}
+
 // --- Yapısal aylık borç yükü (taksitli borçların güncel taksit tutarları + KMH'nin asgari faiz maliyeti) ---
 // KMH'de sabit taksit yok — bu yüzden "aylık yük" olarak, kalan bakiyenin faiziyle asgari
 // maliyetini varsayıyoruz (interest_rate zaten AYLIK olarak saklanıyor, bkz. borç ekleme formu).
@@ -122,8 +130,22 @@ export function saglikSkoruHesapla(params: {
   gecikenSayisi: number
   buAyNet: number
   toplamBirikim: number
+  hicVeriYokMu?: boolean // borç, işlem VE birikim hedefi hiç yoksa true — "riskli" değil "henüz başlanmamış"
 }): SaglikSkoru {
-  const { borcGelirOrani, gecikenSayisi, buAyNet, toplamBirikim } = params
+  const { borcGelirOrani, gecikenSayisi, buAyNet, toplamBirikim, hicVeriYokMu = false } = params
+
+  // DÜZELTME (kullanıcı bulgusu): Tüm veriler silindiğinde/hiç veri girilmediğinde skor
+  // eskiden 65'te kalıyordu — "toplamBirikim > 0" şartı borcun da hiç olmadığı bir
+  // durumda bile 15 puanı düşürüyordu. Hiç veri yoksa bu "riskli" değil "henüz
+  // başlanmamış" demektir — skor 100, nötr bir başlangıç mesajıyla.
+  if (hicVeriYokMu) {
+    return {
+      skor: 100,
+      nedenler: ['Henüz veri girilmedi — bu, gerçek bir skor değil, temiz bir başlangıç noktası.'],
+      durum: { etiket: 'Yeni Başlangıç', badge: 'bg-sage-soft text-sage', metin: 'text-sage', cubuk: 'bg-sage' },
+    }
+  }
+
   const nedenler: string[] = []
   let skor = 0
 
@@ -240,6 +262,33 @@ export function amortismanSimuleEt(params: {
   }
 
   return { kalanFaizToplami: toplamFaiz, aySayisi: ay, toplamOdenecek: kalanAnapara + toplamFaiz, gecersiz: false }
+}
+
+// --- Faiz Oranı Tahmini (amortismanSimuleEt'in TERSİ) ---
+// Anapara + taksit tutarı + taksit sayısı biliniyorsa, aylık faiz oranını kapalı-formda
+// çözmenin yolu yok (standart kredi formülünde r için analitik çözüm yok) — bu yüzden
+// ikili arama (bisection) kullanılıyor. AYNI "azalan bakiye" modeli kullanılıyor
+// (amortismanSimuleEt ile aynı mantık, ayrı bir hesaplama kuralı YAZILMADI).
+export function faizOraniTahminEt(params: {
+  anapara: number
+  taksitTutari: number
+  taksitSayisi: number
+}): number | null {
+  const { anapara, taksitTutari, taksitSayisi } = params
+  if (anapara <= 0 || taksitTutari <= 0 || taksitSayisi <= 0) return null
+  // Taksit tutarı, faizsiz eşit bölüme (anapara/N) eşit ya da azsa, pozitif bir faiz
+  // oranı bu taksitle asla ödenemez (borç hiç kapanmaz) — çözüm yok.
+  if (taksitTutari <= anapara / taksitSayisi) return null
+
+  let alt = 0
+  let ust = 1 // aylık %100 — gerçekçi her senaryoyu fazlasıyla kapsayan üst sınır
+  for (let i = 0; i < 100; i++) {
+    const orta = (alt + ust) / 2
+    const hesaplananTaksit = orta === 0 ? anapara / taksitSayisi : (anapara * orta) / (1 - Math.pow(1 + orta, -taksitSayisi))
+    if (hesaplananTaksit < taksitTutari) alt = orta
+    else ust = orta
+  }
+  return (alt + ust) / 2
 }
 
 // --- Net Servet (FAZ 0, madde 2) ---
@@ -368,17 +417,47 @@ export type HesaplananBildirim = {
 }
 
 type BorcKaynagi = { id: string; institution_name: string; remaining_amount: number | string; due_date: string | null }
-type DuzenliKaynagi = { id: string; category: string; description: string | null; amount: number | string; day_of_month: number }
+type DuzenliKaynagi = {
+  id: string; category: string; description: string | null; amount: number | string; day_of_month: number
+  abonelik_mi?: boolean; vergi_harc_mi?: boolean; saglayici_adi?: string | null
+  fatura_dongusu?: 'aylik' | 'yillik'; fatura_ay?: number | null
+  iptal_hatirlatma_gun?: number | null
+}
 type AlacakKaynagi = { id: string; contact_name: string; remaining_amount: number | string; expected_date: string | null }
 
-// Düzenli işlemin bu ya da gelecek ayki tekrar tarihini hesaplar (BildirimZili'nden taşındı)
-export function sonrakiTarihHesapla(gun: number, bugun: Date = new Date()): Date {
+// Düzenli işlemin (ya da aboneliğin) bir sonraki tekrar tarihini hesaplar (BildirimZili'nden
+// taşındı). `faturaDongusu`/`faturaAy` opsiyonel — verilmezse mevcut "her ay" davranışı
+// AYNEN korunur (geriye uyumlu, Abonelik Takibi fazından önceki tüm çağrılar etkilenmez).
+export function sonrakiTarihHesapla(
+  gun: number,
+  bugun: Date = new Date(),
+  faturaDongusu: 'aylik' | 'yillik' = 'aylik',
+  faturaAy?: number | null,
+): Date {
+  const bugunSifirli = new Date(bugun)
+  bugunSifirli.setHours(0, 0, 0, 0)
+
+  if (faturaDongusu === 'yillik' && faturaAy) {
+    const ayIndex0 = faturaAy - 1
+    const buYilSonGun = new Date(bugun.getFullYear(), ayIndex0 + 1, 0).getDate()
+    const buYilGun = Math.min(gun, buYilSonGun)
+    let hedef = new Date(bugun.getFullYear(), ayIndex0, buYilGun)
+    hedef.setHours(0, 0, 0, 0)
+
+    if (hedef < bugunSifirli) {
+      const gelecekYil = bugun.getFullYear() + 1
+      const gelecekYilSonGun = new Date(gelecekYil, ayIndex0 + 1, 0).getDate()
+      const gelecekYilGun = Math.min(gun, gelecekYilSonGun)
+      hedef = new Date(gelecekYil, ayIndex0, gelecekYilGun)
+    }
+    return hedef
+  }
+
+  // --- Aylık (varsayılan, mevcut mantık — değişmedi) ---
   const buAySonGun = new Date(bugun.getFullYear(), bugun.getMonth() + 1, 0).getDate()
   const buAyGun = Math.min(gun, buAySonGun)
   let hedef = new Date(bugun.getFullYear(), bugun.getMonth(), buAyGun)
   hedef.setHours(0, 0, 0, 0)
-  const bugunSifirli = new Date(bugun)
-  bugunSifirli.setHours(0, 0, 0, 0)
 
   if (hedef < bugunSifirli) {
     const gelecekAyYil = bugun.getMonth() === 11 ? bugun.getFullYear() + 1 : bugun.getFullYear()
@@ -391,10 +470,12 @@ export function sonrakiTarihHesapla(gun: number, bugun: Date = new Date()): Date
 }
 
 // Tek yerde: hangi bildirim tipi hangi eşikte "kritik", hangi eşikte "uyari" olur.
+// `esikGun` opsiyonel — abonelikler kendi `iptal_hatirlatma_gun` eşiğini geçebilir,
+// verilmezse genel varsayılan (5 gün) kullanılır.
 const YAKLASAN_ESIK_GUN = 5
-function yaklasanOncelik(gunKaldi: number): BildirimOnceligi | null {
+function yaklasanOncelik(gunKaldi: number, esikGun: number = YAKLASAN_ESIK_GUN): BildirimOnceligi | null {
   if (gunKaldi < 0) return 'kritik'
-  if (gunKaldi <= YAKLASAN_ESIK_GUN) return 'uyari'
+  if (gunKaldi <= esikGun) return 'uyari'
   return null // eşik dışı, bildirime dönüşmez
 }
 
@@ -423,15 +504,17 @@ export function bildirimleriHesapla(
     })
   }
 
-  // --- Düzenli işlemler ---
+  // --- Düzenli işlemler (abonelikler dahil — abonelik, recurring_items'ın alt tipi) ---
   for (const r of duzenliIslemler) {
-    const tarih = sonrakiTarihHesapla(r.day_of_month, bugun)
+    const tarih = sonrakiTarihHesapla(r.day_of_month, bugun, r.fatura_dongusu ?? 'aylik', r.fatura_ay ?? null)
     const tarihStr = `${tarih.getFullYear()}-${ikiBasamak(tarih.getMonth() + 1)}-${ikiBasamak(tarih.getDate())}`
     const gunKaldi = gunKaldiHesapla(tarihStr, bugun)
-    const oncelik = yaklasanOncelik(gunKaldi)
+    const oncelik = yaklasanOncelik(gunKaldi, r.iptal_hatirlatma_gun ?? undefined)
     if (!oncelik) continue
     sonuc.push({
-      tur: 'duzenli_yaklasan', oncelik, id: r.id, baslik: r.category, altBaslik: r.description || '',
+      tur: 'duzenli_yaklasan', oncelik, id: r.id,
+      baslik: (r.abonelik_mi || r.vergi_harc_mi) && r.saglayici_adi ? r.saglayici_adi : r.category,
+      altBaslik: r.description || '',
       tutar: Number(r.amount), gunKaldi,
     })
   }
@@ -464,4 +547,28 @@ export function bildirimleriHesapla(
     if (p !== 0) return p
     return (x.gunKaldi ?? 999) - (y.gunKaldi ?? 999)
   })
+}
+
+// ============================================================================
+// ABONELİK TAKİBİ — recurring_items'ın (abonelik_mi=true) üzerine ince bir katman
+// ============================================================================
+
+export type AbonelikKaynagi = {
+  id: string
+  amount: number | string
+  active: boolean
+  fatura_dongusu?: 'aylik' | 'yillik'
+}
+
+// Yıllık abonelikleri 12'ye bölüp aylık eşdeğer toplam abonelik gideri hesaplar.
+// Özet kartı ve Abonelikler sayfası başlığı AYNI fonksiyonu çağırır — iki ayrı
+// yerde iki farklı toplam hesaplanmasın diye (Gelir-Gider/Özet gider dağılımı
+// P0 hatasının aynısını burada tekrarlamamak için).
+export function abonelikToplamiHesapla(abonelikler: AbonelikKaynagi[]): number {
+  return abonelikler
+    .filter((a) => a.active)
+    .reduce((toplam, a) => {
+      const tutar = Number(a.amount)
+      return toplam + (a.fatura_dongusu === 'yillik' ? tutar / 12 : tutar)
+    }, 0)
 }

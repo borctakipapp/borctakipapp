@@ -41,14 +41,7 @@ export default async function AdminGruplarPage({
   }
 
   return (
-    <div className="min-h-screen bg-paper">
-      <header className="bg-navy px-6 py-4 flex items-center justify-between sticky top-0 z-20">
-        <span className="text-paper font-medium text-sm tracking-wide">borctakipapp · admin</span>
-        <Link href="/admin" className="text-paper/70 hover:text-paper text-xs border border-paper/30 rounded-md px-3 py-1.5 transition-colors">
-          ← Admin Paneline Dön
-        </Link>
-      </header>
-
+    <>
       <main className="max-w-2xl mx-auto px-6 py-10">
         <h1 className="text-xl font-medium text-navy mb-1">Ortak Hesap Grupları</h1>
         <p className="text-sm text-muted mb-6">Bir kullanıcının e-postasını ara, o kullanıcının üye olduğu gruplar listelensin.</p>
@@ -83,6 +76,6 @@ export default async function AdminGruplarPage({
           </div>
         )}
       </main>
-    </div>
+    </>
   )
 }

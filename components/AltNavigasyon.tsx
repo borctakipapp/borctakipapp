@@ -1,15 +1,21 @@
 import Link from 'next/link'
 import { SEKMELER, type SekmeKey } from './AppHeader'
+import MobilMenu from './MobilMenu'
+
+// Alt navigasyon artık TÜM sekmeleri göstermiyor — 10 sekme oldu, bottom bar'a sığmıyor
+// (5+ sekme mobilde parmakla dokunması zor küçük hedeflere dönüşüyor). Sadece en sık
+// kullanılan 4 "çekirdek" sekme burada sabit, geri kalanı "Daha Fazla" menüsünde
+// (MobilMenu.tsx — soldan açılan panel, masaüstü kenar çubuğuyla aynı listeyi gösterir).
+const CORE_SEKME_ANAHTARLARI: SekmeKey[] = ['ozet', 'borclar', 'gelir-gider', 'birikim']
 
 export default function AltNavigasyon({ aktif }: { aktif: SekmeKey }) {
-  // "masaustuSadece" işaretli sekmeler (örn. Alacaklar) mobil alt navda gösterilmez.
-  const mobilSekmeler = SEKMELER.filter((s) => !('masaustuSadece' in s && s.masaustuSadece))
+  const coreSekmeler = SEKMELER.filter((s) => CORE_SEKME_ANAHTARLARI.includes(s.key))
   return (
     <nav
       className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-border flex items-center justify-around py-1.5 z-40"
       style={{ paddingBottom: 'env(safe-area-inset-bottom, 6px)' }}
     >
-      {mobilSekmeler.map((s) => (
+      {coreSekmeler.map((s) => (
         <Link
           key={s.key}
           href={s.href}
@@ -21,6 +27,7 @@ export default function AltNavigasyon({ aktif }: { aktif: SekmeKey }) {
           {s.etiket}
         </Link>
       ))}
+      <MobilMenu aktif={aktif} />
     </nav>
   )
 }

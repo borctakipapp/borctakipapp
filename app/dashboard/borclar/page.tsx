@@ -96,9 +96,9 @@ export default async function BorclarPage() {
                   <div className={`bg-white rounded-lg pl-4 pr-4 py-3 flex items-center gap-3 border-l-4 ${durum.renk} hover:shadow-sm transition-shadow cursor-pointer`}>
                     <Monogram isim={debt.institution_name} boyut={38} />
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium text-navy text-sm truncate">
-                        <span className="mr-1">{KATEGORI_IKON[debt.category] || '📄'}</span>
-                        {debt.institution_name}
+                      <p className="font-medium text-navy text-sm flex items-center gap-1 min-w-0" title={debt.institution_name}>
+                        <span className="shrink-0">{KATEGORI_IKON[debt.category] || '📄'}</span>
+                        <span className="truncate min-w-0">{debt.institution_name}</span>
                       </p>
                       <p className="text-xs text-muted mt-0.5">
                         {KATEGORI_ETIKET[debt.category] || debt.category}

@@ -45,13 +45,20 @@ export default function HesapDefteriModal({
           Aşağıda ham hesabı (kim ne kadar ödedi, payına ne düştü) görebilirsin.
         </p>
 
+        <div className="bg-paper rounded-lg p-3 mb-4 flex items-center justify-between">
+          <span className="text-xs text-muted">Toplam Grup Harcaması</span>
+          <span className="font-mono text-sm text-navy font-medium">
+            {harcamalar.reduce((s, h) => s + Number(h.tutar), 0).toLocaleString('tr-TR')} ₺
+          </span>
+        </div>
+
         <h3 className="text-xs font-medium text-muted uppercase tracking-wide mb-2">Kişi Bazlı Özet</h3>
         <div className="flex flex-col gap-2 mb-5">
           {kisiOzetleri.map((k) => (
             <div key={k.user_id} className="bg-white rounded-lg p-3 border border-border">
               <div className="flex items-center gap-2 mb-2">
                 <Monogram isim={k.ad_soyad || '?'} boyut={26} />
-                <p className="text-sm text-navy font-medium flex-1 truncate">{k.ad_soyad}</p>
+                <p className="text-sm text-navy font-medium flex-1 min-w-0 truncate" title={k.ad_soyad || ''}>{k.ad_soyad}</p>
                 <span className={`font-mono text-sm font-medium ${k.net >= 0 ? 'text-sage' : 'text-brick'}`}>
                   {k.net >= 0 ? '+' : ''}{k.net.toLocaleString('tr-TR')} ₺
                 </span>

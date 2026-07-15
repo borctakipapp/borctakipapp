@@ -6,13 +6,9 @@ import {
   toplamBorcHesapla, ayKirilimiHesapla, aylikBorcYukuHesapla, borcGelirOraniHesapla,
   gecikenBorcSayisiHesapla, saglikSkoruHesapla, ayAraligiUret, ikiBasamak as ikiBasamakOz,
   netServetHesapla, gunKaldiHesapla, giderKategorileriHesapla, borcKapanmaTahminiHesapla, enYuksekFaizliBorcBul,
-  toplamBirikimHesapla, toplamBekleyenAlacakHesapla,
+  toplamBirikimHesapla, toplamBekleyenAlacakHesapla, abonelikToplamiHesapla,
 } from '@/lib/finans-motoru'
-
-const KATEGORI_RENK: Record<string, string> = {
-  'Market/Gıda': '#B5533C', 'Ulaşım': '#D98E3F', 'Eğlence': '#7f8ba0', 'Sağlık': '#1B2A4A',
-  'Giyim': '#9c7ab5', 'Eğitim': '#4A7C74', 'Kişisel Bakım': '#c98a8a', 'Birikim Aktarımı': '#4A7C74', 'Ortak Hesap': '#D9A441', 'Diğer Gider': '#6b6f7a',
-}
+import { GIDER_KATEGORI_RENK as KATEGORI_RENK } from '@/lib/gider-kategorileri'
 
 export default async function OzetPage() {
   const supabase = await createClient()
@@ -39,6 +35,7 @@ export default async function OzetPage() {
     { data: kapanmisBorclar },
     { data: benimGruplarim },
     { data: receivables },
+    { data: abonelikler },
   ] = await Promise.all([
     supabase.from('profiles').select('full_name').eq('id', userId).single(),
     supabase.from('debts').select('*').eq('user_id', userId).eq('status', 'active').order('due_date', { ascending: true }),
@@ -47,6 +44,7 @@ export default async function OzetPage() {
     supabase.from('debts').select('id').eq('user_id', userId).eq('status', 'paid').limit(1),
     supabase.from('gruplar').select('id').eq('olusturan_id', userId).limit(1),
     supabase.from('receivables').select('remaining_amount, status').eq('user_id', userId).eq('status', 'pending'),
+    supabase.from('recurring_items').select('id, amount, active, fatura_dongusu').eq('user_id', userId).eq('abonelik_mi', true).eq('active', true),
   ])
 
   const ilkIsim = profile?.full_name ? profile.full_name.split(' ')[0] : null
@@ -133,8 +131,9 @@ export default async function OzetPage() {
 
   // --- FİNANS MOTORU: Borç/Gelir oranı + Finansal Sağlık Skoru ---
   const borcGelirOrani = borcGelirOraniHesapla(aylikBorcYuku, buAyGelir)
+  const hicVeriYokMu = (debts || []).length === 0 && (hedefler || []).length === 0 && (genisTx || []).length === 0
   const { skor, nedenler: skorNedenleri, durum: skorDurum } = saglikSkoruHesapla({
-    borcGelirOrani, gecikenSayisi, buAyNet, toplamBirikim,
+    borcGelirOrani, gecikenSayisi, buAyNet, toplamBirikim, hicVeriYokMu,
   })
 
   // --- FİNANS MOTORU: gider dağılımı (Gelir-Gider sayfasıyla AYNI fonksiyon) ---
@@ -142,6 +141,9 @@ export default async function OzetPage() {
 
   // --- FİNANS MOTORU: Bekleyen Alacaklar (bilgi amaçlı — Net Servet'e DAHİL DEĞİL, FAZ 0.5 kararı) ---
   const toplamBekleyenAlacak = toplamBekleyenAlacakHesapla(receivables || [])
+
+  // --- FİNANS MOTORU: Abonelikler (aylık eşdeğer toplam — Abonelikler sayfasıyla AYNI fonksiyon) ---
+  const aylikAbonelikToplami = abonelikToplamiHesapla(abonelikler || [])
 
   return (
     <main className="max-w-2xl mx-auto px-6 py-10 pb-24 md:pb-10">
@@ -209,6 +211,7 @@ export default async function OzetPage() {
           giderListesi={giderListesi}
           enBuyukGider={enBuyukGider}
           toplamBekleyenAlacak={toplamBekleyenAlacak}
+          aylikAbonelikToplami={aylikAbonelikToplami}
         />
       </main>
     
